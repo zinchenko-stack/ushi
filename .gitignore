@@ -1,0 +1,6 @@
+build/
+DerivedData/
+release/build/
+*.xcresult
+*.dSYM
+.DS_Store

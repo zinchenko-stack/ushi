@@ -1,0 +1,348 @@
+//
+//  RecordingDetailView.swift
+//  ushi
+//
+
+import SwiftUI
+
+struct RecordingDetailView: View {
+    let recordingID: Recording.ID
+    @Bindable var store: RecordingsStore
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var player = AudioPlayerModel()
+    @State private var isEditingTitle = false
+    @State private var draftTitle = ""
+    @State private var transcriptText: String?
+
+    init(recording: Recording, store: RecordingsStore) {
+        self.recordingID = recording.id
+        self._store = Bindable(store)
+    }
+
+    private var recording: Recording? {
+        store.recordings.first(where: { $0.id == recordingID })
+    }
+
+    var body: some View {
+        Group {
+            if let rec = recording {
+                content(for: rec)
+            } else {
+                ContentUnavailableView("Запись удалена", systemImage: "trash")
+                    .task { dismiss() }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func content(for rec: Recording) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            header(for: rec)
+                .padding(24)
+
+            transcriptSection(for: rec)
+                .padding([.horizontal, .bottom], 24)
+        }
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button(role: .destructive) {
+                    player.stop()
+                    store.delete(rec)
+                } label: {
+                    Label("Удалить", systemImage: "trash")
+                }
+            }
+        }
+        .onAppear {
+            loadAudio(for: rec)
+            loadTranscript(for: rec)
+        }
+        .onChange(of: rec.status)             { _, _ in loadTranscript(for: rec) }
+        .onChange(of: rec.transcriptFileName) { _, _ in loadTranscript(for: rec) }
+        .onDisappear { player.stop() }
+    }
+
+    // MARK: - Header
+
+    private func header(for rec: Recording) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            titleSection(for: rec)
+
+            HStack(spacing: 12) {
+                Label(rec.createdAt.formatted(date: .abbreviated, time: .shortened),
+                      systemImage: "calendar")
+                Label(formatDuration(rec.duration), systemImage: "clock")
+                if rec.audioRemoved {
+                    Label("аудио удалено", systemImage: "externaldrive.badge.minus")
+                }
+            }
+            .font(.title3)
+            .foregroundStyle(.secondary)
+
+            if !rec.audioRemoved {
+                // Для .mov берём аудиодорожку — слушать звук удобно прямо здесь,
+                // а само видео открывается отдельной кнопкой в actionsRow.
+                playerSection
+                    .padding(.top, 8)
+            }
+
+            if hasTopActions(rec) {
+                actionsRow(for: rec)
+                    .padding(.top, 8)
+            }
+        }
+    }
+
+    private func isVideo(_ rec: Recording) -> Bool {
+        rec.audioFileName.lowercased().hasSuffix(".mov")
+    }
+
+    private func openExternally(_ rec: Recording) {
+        let dir = rec.storageDirectoryURL()
+        let url = dir.appendingPathComponent(rec.audioFileName)
+        guard FileManager.default.fileExists(atPath: url.path) else { return }
+        NSWorkspace.shared.open(url)
+    }
+
+    private func hasTopActions(_ rec: Recording) -> Bool {
+        (isVideo(rec) && !rec.audioRemoved)
+        || (rec.status == .done && (transcriptText?.isEmpty == false))
+        || store.canRetryTranscription(rec)
+    }
+
+    // Ряд действий наверху: открыть видео / скопировать / повторить транскрибацию.
+    @ViewBuilder
+    private func actionsRow(for rec: Recording) -> some View {
+        HStack(spacing: 8) {
+            if isVideo(rec), !rec.audioRemoved {
+                Button {
+                    openExternally(rec)
+                } label: {
+                    actionButtonLabel("Открыть видео", assetName: "Play")
+                }
+                .buttonStyle(.bordered)
+            }
+
+            if rec.status == .done, let text = transcriptText, !text.isEmpty {
+                CopyButton(text: text)
+            }
+
+            if store.canRetryTranscription(rec) {
+                Button {
+                    store.retryTranscription(rec)
+                } label: {
+                    actionButtonLabel("Повторить транскрибацию", assetName: "RefreshReverse")
+                }
+                .buttonStyle(.bordered)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    @ViewBuilder
+    private func titleSection(for rec: Recording) -> some View {
+        if isEditingTitle {
+            TextField("Название", text: $draftTitle)
+                .textFieldStyle(.roundedBorder)
+                .font(.largeTitle)
+                .onSubmit { commitTitle(for: rec) }
+        } else {
+            Text(rec.title)
+                .font(.largeTitle.bold())
+                .onTapGesture(count: 2) {
+                    draftTitle = rec.title
+                    isEditingTitle = true
+                }
+        }
+    }
+
+    private var playerSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 16) {
+                Button {
+                    player.togglePlay()
+                } label: {
+                    Image(systemName: player.isPlaying ? "pause.circle.fill" : "play.circle.fill")
+                        .font(.system(size: 44))
+                }
+                .buttonStyle(.plain)
+                .disabled(player.duration == 0)
+
+                Slider(
+                    value: Binding(
+                        get: { player.currentTime },
+                        set: { player.seek(to: $0) }
+                    ),
+                    in: 0...max(player.duration, 0.01)
+                )
+                .disabled(player.duration == 0)
+
+                Text("\(formatTimecode(player.currentTime)) / \(formatTimecode(player.duration))")
+                    .font(.callout.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                    .frame(minWidth: 100, alignment: .trailing)
+            }
+            .padding()
+            .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 12))
+
+            if let err = player.loadError {
+                Text("Не удалось загрузить аудио: \(err)")
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+        }
+    }
+
+    // MARK: - Transcript
+
+    @ViewBuilder
+    private func transcriptSection(for rec: Recording) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                switch rec.status {
+                case .pending, .transcribing:
+                    statusBlock("Транскрибируется…", isError: false, recording: rec)
+                case .failed:
+                    statusBlock("Не удалось создать транскрипцию", isError: true, recording: rec)
+                case .done:
+                    if let text = transcriptText, !text.isEmpty {
+                        Text(text)
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    } else {
+                        Text("Транскрипция недоступна").foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .padding(.vertical, 8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    @ViewBuilder
+    private func statusBlock(_ text: String, isError: Bool, recording rec: Recording) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 10) {
+                if isError {
+                    Image(systemName: "exclamationmark.triangle").foregroundStyle(.red)
+                } else {
+                    ProgressView().controlSize(.small)
+                }
+                Text(text).foregroundStyle(isError ? .red : .secondary)
+            }
+            if isError, store.canRetryTranscription(rec) {
+                Button {
+                    store.retryTranscription(rec)
+                } label: {
+                    Label("Повторить транскрибацию", systemImage: "arrow.clockwise")
+                }
+            } else if isError {
+                Text("Аудио уже удалено по политике хранения — повторная транскрипция невозможна.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    // MARK: - Загрузка
+
+    private func loadAudio(for rec: Recording) {
+        // AVAudioPlayer открывает .mov по аудиодорожке — отдельной ветки для видео не нужно.
+        guard !rec.audioFileName.isEmpty else { return }
+        let dir = rec.storageDirectoryURL()
+        let url = dir.appendingPathComponent(rec.audioFileName)
+        guard FileManager.default.fileExists(atPath: url.path) else { return }
+        player.load(url: url)
+    }
+
+    private func loadTranscript(for rec: Recording) {
+        guard let name = rec.transcriptFileName else {
+            transcriptText = nil
+            return
+        }
+        do {
+            let dir = rec.storageDirectoryURL()
+            let url = dir.appendingPathComponent(name)
+            transcriptText = try String(contentsOf: url, encoding: .utf8)
+        } catch {
+            transcriptText = nil
+        }
+    }
+
+    private func commitTitle(for rec: Recording) {
+        let trimmed = draftTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty {
+            store.rename(rec, to: trimmed)
+        }
+        isEditingTitle = false
+    }
+
+    private func formatDuration(_ t: TimeInterval) -> String {
+        let total = Int(t)
+        let h = total / 3600
+        let m = (total % 3600) / 60
+        let s = total % 60
+        if h > 0 { return "\(h) ч \(m) мин" }
+        if m > 0 { return "\(m) мин \(s) с" }
+        return "\(s) с"
+    }
+
+    private func formatTimecode(_ t: TimeInterval) -> String {
+        let total = Int(t)
+        let m = total / 60
+        let s = total % 60
+        return String(format: "%02d:%02d", m, s)
+    }
+
+    /// Лейбл action-кнопки с Mage-иконкой фиксированного размера 14pt.
+    /// Все три кнопки используют этот helper → иконки одинаковой высоты, тексты на одном baseline.
+    private func actionButtonLabel(_ title: String, assetName: String) -> some View {
+        HStack(spacing: 6) {
+            Image(assetName)
+                .renderingMode(.template)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 14, height: 14)
+            Text(title)
+        }
+    }
+}
+
+private struct CopyButton: View {
+    let text: String
+    @State private var copied = false
+
+    var body: some View {
+        Button {
+            let pb = NSPasteboard.general
+            pb.clearContents()
+            pb.setString(text, forType: .string)
+            copied = true
+            Task {
+                try? await Task.sleep(nanoseconds: 1_500_000_000)
+                copied = false
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Image(copied ? "Check" : "Copy")
+                    .renderingMode(.template)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 14, height: 14)
+
+                // Ширина текста фиксируется по самому длинному варианту,
+                // чтобы кнопка не «росла» при смене «Скопировать» → «Скопировано».
+                ZStack(alignment: .leading) {
+                    Text("Скопировано").hidden()
+                    Text(copied ? "Скопировано" : "Скопировать")
+                }
+            }
+        }
+        .buttonStyle(.bordered)
+        .animation(.easeInOut(duration: 0.15), value: copied)
+    }
+}
