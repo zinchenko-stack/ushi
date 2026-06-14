@@ -83,11 +83,11 @@
 
     .pill .brand {
       font-family: "Clash Display", "Onest", sans-serif;
-      font-weight: 600;
+      font-weight: 500;
       font-size: 28px;
       line-height: 40px;
       color: var(--element-accent);
-      letter-spacing: 0;
+      letter-spacing: -1.5px;
     }
 
     h1 {
@@ -97,7 +97,7 @@
       line-height: 60px;
       letter-spacing: 0;
       text-align: center;
-      padding-top: 8px;
+      padding-top: 20px;
       max-width: 800px;
     }
 
@@ -171,6 +171,28 @@
       letter-spacing: -0.14px;
       color: var(--element-secondary);
       text-align: center;
+    }
+
+    /* Hero entrance animation — fade + lift, staggered */
+    @keyframes hero-rise {
+      from { opacity: 0; transform: translateY(24px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .pill, h1, .lead, .action {
+      opacity: 0;
+      animation: hero-rise 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+    }
+    .pill   { animation-delay: 0.05s; }
+    h1      { animation-delay: 0.20s; }
+    .lead   { animation-delay: 0.35s; }
+    .action { animation-delay: 0.50s; }
+
+    @media (prefers-reduced-motion: reduce) {
+      .pill, h1, .lead, .action {
+        animation: none;
+        opacity: 1;
+      }
     }
 
     /* Mobile */
