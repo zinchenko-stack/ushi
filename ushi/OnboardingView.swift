@@ -88,8 +88,15 @@ struct OnboardingView: View {
                     .font(.callout.monospacedDigit())
                     .foregroundStyle(.secondary)
 
-                Button("Отмена") {
-                    showingCancelConfirmation = true
+                HStack(spacing: 12) {
+                    Button("Отмена") {
+                        showingCancelConfirmation = true
+                    }
+
+                    Button("Свернуть и пользоваться сейчас") {
+                        manager.dismissOnboarding()
+                    }
+                    .buttonStyle(.bordered)
                 }
             }
 

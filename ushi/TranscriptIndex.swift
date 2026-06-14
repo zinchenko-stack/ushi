@@ -68,8 +68,7 @@ final class TranscriptIndex {
                 var working: [UUID: Entry] = [:]
 
                 for rec in recordings {
-                    guard let name = rec.transcriptFileName else { continue }
-                    let url = rec.storageDirectoryURL().appendingPathComponent(name)
+                    guard let url = rec.transcriptURL() else { continue }
                     guard let attrs = try? fm.attributesOfItem(atPath: url.path),
                           let modDate = attrs[.modificationDate] as? Date else { continue }
 

@@ -121,7 +121,14 @@ struct TranscriptionService {
         return kept.joined(separator: "\n")
     }
 
-    static func transcribe(audioURL: URL, language: String? = nil) async throws -> URL {
+    /// `outputDirectory` — куда положить итоговый .txt. По умолчанию рядом с аудио (старое поведение);
+    /// в проде передаётся `AppSettings.transcriptsDirectory()`, чтобы транскрипты не засоряли
+    /// пользовательскую папку с медиа.
+    static func transcribe(
+        audioURL: URL,
+        language: String? = nil,
+        outputDirectory: URL? = nil
+    ) async throws -> URL {
         // nil → берём язык из настроек (Авто/Русский/Английский).
         let language = language ?? AppSettings.transcriptionLanguage().rawValue
         guard let binary = resolveBinary() else {
@@ -157,7 +164,15 @@ struct TranscriptionService {
         // VAD-модель (silero) — отсекает тишину. Если её нет/не скачалась, идём без VAD.
         let vadModel = await ensureVADModel()
 
-        let outputPrefix = audioURL.deletingPathExtension().path
+        // outputPrefix управляет тем, КУДА whisper-cli напишет .txt: он добавит ".txt".
+        // Кладём prefix в outputDirectory если задан, иначе — рядом с аудио (старое поведение).
+        let baseName = audioURL.deletingPathExtension().lastPathComponent
+        let outputDir = outputDirectory ?? audioURL.deletingLastPathComponent()
+        if outputDirectory != nil {
+            try? FileManager.default.createDirectory(at: outputDir, withIntermediateDirectories: true)
+        }
+        let outputPrefix = outputDir.appendingPathComponent(baseName).path
+
         try await runWhisper(
             binary: binary,
             model: model.path,
@@ -171,7 +186,7 @@ struct TranscriptionService {
         print("🧠 [transcribe] whisper done in \(String(format: "%.1f", Date().timeIntervalSince(t1)))s")
         #endif
 
-        let txtURL = audioURL.deletingPathExtension().appendingPathExtension("txt")
+        let txtURL = outputDir.appendingPathComponent("\(baseName).txt")
         guard FileManager.default.fileExists(atPath: txtURL.path) else {
             throw TranscriptionError.outputMissing
         }

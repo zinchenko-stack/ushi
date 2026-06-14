@@ -117,4 +117,17 @@ struct Recording: Identifiable, Codable, Hashable {
         }
         return AppSettings.defaultRecordingsDirectory()
     }
+
+    /// Папка с транскриптами — всегда служебная (Application Support/ushi/transcripts/),
+    /// независимо от того, куда пользователь сохраняет медиа.
+    func transcriptDirectoryURL() -> URL? {
+        try? AppSettings.transcriptsDirectory()
+    }
+
+    /// Полный путь к .txt, если он есть.
+    func transcriptURL() -> URL? {
+        guard let name = transcriptFileName, !name.isEmpty,
+              let dir = transcriptDirectoryURL() else { return nil }
+        return dir.appendingPathComponent(name)
+    }
 }

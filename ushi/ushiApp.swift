@@ -31,12 +31,16 @@ struct ushiApp: App {
                     ProgressView()
                         .controlSize(.large)
                         .frame(minWidth: 560, minHeight: 420)
-                case .missing, .downloading, .failed:
+                case .missing:
                     OnboardingView(manager: modelManager)
+                case .downloading, .failed:
+                    if modelManager.userDismissedOnboarding {
+                        mainContent
+                    } else {
+                        OnboardingView(manager: modelManager)
+                    }
                 case .ready:
-                    ContentView()
-                        .frame(minWidth: 980, minHeight: 560)
-                        .environment(updateChecker)
+                    mainContent
                 }
             }
             .task {
@@ -51,5 +55,12 @@ struct ushiApp: App {
                 }
             }
         }
+    }
+
+    private var mainContent: some View {
+        ContentView()
+            .frame(minWidth: 980, minHeight: 560)
+            .environment(updateChecker)
+            .environment(modelManager)
     }
 }

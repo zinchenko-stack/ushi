@@ -23,10 +23,24 @@ final class ModelManager {
         string: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin"
     )!
     private static let minimumFreeSpace: Int64 = 2_000_000_000
+    private static let dismissedOnboardingKey = "ushi.onboarding.dismissed"
 
     var state: State = .checking
+    var userDismissedOnboarding: Bool {
+        didSet {
+            UserDefaults.standard.set(
+                userDismissedOnboarding,
+                forKey: Self.dismissedOnboardingKey
+            )
+        }
+    }
 
     let modelURL: URL
+
+    var isReady: Bool {
+        if case .ready = state { return true }
+        return false
+    }
 
     @ObservationIgnored private let fileManager = FileManager.default
     @ObservationIgnored private let delegate: ModelDownloadDelegate
@@ -76,6 +90,9 @@ final class ModelManager {
         self.modelURL = modelURL
         self.downloadURL = downloadURL
         self.supportDirectory = supportDirectory
+        self.userDismissedOnboarding = UserDefaults.standard.bool(
+            forKey: Self.dismissedOnboardingKey
+        )
         delegate = ModelDownloadDelegate(
             stagingURL: modelURL.appendingPathExtension("partial"),
             resumeDataURL: self.supportDirectory
@@ -91,6 +108,7 @@ final class ModelManager {
         if fileManager.fileExists(atPath: modelURL.path) {
             try? fileManager.removeItem(at: resumeDataURL)
             try? fileManager.removeItem(at: stagingURL)
+            userDismissedOnboarding = false
             state = .ready
             return
         }
@@ -212,11 +230,20 @@ final class ModelManager {
             try? fileManager.removeItem(at: modelURL)
             try fileManager.moveItem(at: stagingURL, to: modelURL)
             try? fileManager.removeItem(at: resumeDataURL)
+            userDismissedOnboarding = false
             state = .ready
         } catch {
             try? fileManager.removeItem(at: stagingURL)
             state = .failed(error.localizedDescription)
         }
+    }
+
+    func dismissOnboarding() {
+        userDismissedOnboarding = true
+    }
+
+    func showOnboarding() {
+        userDismissedOnboarding = false
     }
 
     fileprivate func didFailDownload(_ error: Error, resumeDataWasSaved: Bool) {

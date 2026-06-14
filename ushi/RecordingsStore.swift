@@ -13,11 +13,14 @@ final class RecordingsStore {
     }
 
     @ObservationIgnored private var saveTask: Task<Void, Never>?
+    @ObservationIgnored private var isProcessingPending = false
 
     init() {
         load()
         recoverStuckRecordings()
         cleanupOrphanedSummaries()
+        migrateTranscriptsToServiceFolder()
+        sweepStrayTranscriptsFromMediaFolders()
         purgeOldSourceMedia()
     }
 
@@ -30,23 +33,127 @@ final class RecordingsStore {
 
     func rename(_ recording: Recording, to newTitle: String) {
         guard let idx = recordings.firstIndex(where: { $0.id == recording.id }) else { return }
-        recordings[idx].title = newTitle
+        let trimmed = newTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        recordings[idx].title = trimmed
+        renameFilesOnDisk(at: idx)
+    }
+
+    /// Подгоняет имена файлов (.m4a / .mov / .txt) под текущий title.
+    /// Безопасно: пока транскрибация в процессе — не трогаем (whisper-cli ещё пишет в старый путь).
+    private func renameFilesOnDisk(at idx: Int) {
+        var rec = recordings[idx]
+
+        // Транскрибация в процессе — пропускаем, иначе сломаем whisper.
+        if rec.status == .transcribing || rec.status == .pending { return }
+
+        let base = Self.sanitizeFilename(rec.title)
+        guard !base.isEmpty else { return }
+
+        let fm = FileManager.default
+        let mediaDir = mediaDirectory(for: rec)
+        let txtDir = rec.transcriptDirectoryURL()
+        let audioExt = (rec.audioFileName as NSString).pathExtension
+        let resolved = uniqueBaseName(
+            base: base,
+            mediaDir: mediaDir,
+            txtDir: txtDir,
+            audioExt: audioExt,
+            currentAudio: rec.audioFileName,
+            currentTranscript: rec.transcriptFileName
+        )
+
+        // Аудио / видео — переименовываем только если файл ещё на диске и не помечен как удалённый.
+        if !rec.audioFileName.isEmpty, !rec.audioRemoved, !audioExt.isEmpty {
+            let from = mediaDir.appendingPathComponent(rec.audioFileName)
+            let to = mediaDir.appendingPathComponent("\(resolved).\(audioExt)")
+            if from != to, fm.fileExists(atPath: from.path) {
+                do {
+                    try fm.moveItem(at: from, to: to)
+                    rec.audioFileName = to.lastPathComponent
+                } catch {
+                    print("❌ rename audio failed: \(error.localizedDescription)")
+                }
+            }
+        }
+
+        // Транскрипт (служебная папка, не пользовательская).
+        if let txt = rec.transcriptFileName, !txt.isEmpty, let txtDir {
+            let from = txtDir.appendingPathComponent(txt)
+            let to = txtDir.appendingPathComponent("\(resolved).txt")
+            if from != to, fm.fileExists(atPath: from.path) {
+                do {
+                    try fm.moveItem(at: from, to: to)
+                    rec.transcriptFileName = to.lastPathComponent
+                } catch {
+                    print("❌ rename transcript failed: \(error.localizedDescription)")
+                }
+            }
+        }
+
+        recordings[idx] = rec
+    }
+
+    /// Подбирает базовое имя, не конфликтующее с другими файлами ни в media-, ни в transcripts-папке.
+    /// Текущие файлы самой записи считаются «своими» — на них не реагируем.
+    private func uniqueBaseName(
+        base: String,
+        mediaDir: URL,
+        txtDir: URL?,
+        audioExt: String,
+        currentAudio: String,
+        currentTranscript: String?
+    ) -> String {
+        let fm = FileManager.default
+        var candidate = base
+        var n = 2
+        while true {
+            let audioName = audioExt.isEmpty ? "" : "\(candidate).\(audioExt)"
+            let txtName = "\(candidate).txt"
+            let audioPath = audioName.isEmpty ? nil : mediaDir.appendingPathComponent(audioName).path
+            let txtPath = txtDir?.appendingPathComponent(txtName).path
+
+            let audioOK = audioPath.map { !fm.fileExists(atPath: $0) || audioName == currentAudio } ?? true
+            let txtOK = txtPath.map { !fm.fileExists(atPath: $0) || txtName == currentTranscript } ?? true
+
+            if audioOK && txtOK { return candidate }
+            candidate = "\(base) (\(n))"
+            n += 1
+            if n > 999 { return candidate }   // на всякий случай
+        }
+    }
+
+    /// Чистит имя от символов, опасных для файловой системы. Кириллицу, пробелы,
+    /// числа — оставляем как есть, macOS APFS это всё нормально хранит.
+    private static func sanitizeFilename(_ raw: String) -> String {
+        let invalid: Set<Character> = ["/", "\\", ":", "\0"]
+        var s = String(raw.map { invalid.contains($0) ? "-" : $0 })
+        while s.hasPrefix(".") { s.removeFirst() }
+        s = s.trimmingCharacters(in: .whitespaces)
+        if s.count > 100 {
+            s = String(s.prefix(100)).trimmingCharacters(in: .whitespaces)
+        }
+        return s
     }
 
     @discardableResult
     func addRecording(audioURL: URL, duration: TimeInterval) -> Recording {
+        let canTranscribe = ModelManager.shared.isReady
         let rec = Recording(
             title: "Запись от " + Self.shortDateString(Date()),
             duration: duration,
             audioFileName: audioURL.lastPathComponent,
             storageFolderPath: audioURL.deletingLastPathComponent().path,
-            status: .transcribing
+            status: canTranscribe ? .transcribing : .pending
         )
         recordings.insert(rec, at: 0)
 
-        let recordingID = rec.id
-        Task.detached(priority: .userInitiated) { [weak self] in
-            await self?.runTranscription(id: recordingID, audioURL: audioURL)
+        if canTranscribe {
+            let recordingID = rec.id
+            Task.detached(priority: .userInitiated) { [weak self] in
+                await self?.runTranscription(id: recordingID, audioURL: audioURL)
+            }
         }
         return rec
     }
@@ -65,13 +172,15 @@ final class RecordingsStore {
         let audioURL = dir.appendingPathComponent(recording.audioFileName)
         guard FileManager.default.fileExists(atPath: audioURL.path) else { return }
 
-        if let txt = recording.transcriptFileName {
-            try? FileManager.default.removeItem(at: dir.appendingPathComponent(txt))
+        if let oldTxt = recording.transcriptURL() {
+            try? FileManager.default.removeItem(at: oldTxt)
         }
         update(id: recording.id) {
             $0.transcriptFileName = nil
-            $0.status = .transcribing
+            $0.status = ModelManager.shared.isReady ? .transcribing : .pending
         }
+
+        guard ModelManager.shared.isReady else { return }
 
         let recordingID = recording.id
         Task.detached(priority: .userInitiated) { [weak self] in
@@ -82,9 +191,10 @@ final class RecordingsStore {
     // MARK: - Recovery
 
     /// Зависшие в transcribing после краша — переводим в failed.
+    /// pending остаются в очереди: они могли ждать загрузки модели.
     private func recoverStuckRecordings() {
         for idx in recordings.indices {
-            if recordings[idx].status == .transcribing || recordings[idx].status == .pending {
+            if recordings[idx].status == .transcribing {
                 recordings[idx].status = .failed
             }
         }
@@ -118,6 +228,67 @@ final class RecordingsStore {
         }
     }
 
+    /// Одноразовая миграция: переносит .txt из пользовательской медиа-папки в служебную
+    /// `transcripts/`, чтобы пользовательская папка содержала только медиа.
+    /// После переноса метаданные не меняются (имя файла то же), меняется только локация.
+    private func migrateTranscriptsToServiceFolder() {
+        let fm = FileManager.default
+        guard let txtDir = try? AppSettings.transcriptsDirectory() else { return }
+
+        for rec in recordings {
+            guard let name = rec.transcriptFileName, !name.isEmpty else { continue }
+            let mediaDir = mediaDirectory(for: rec)
+            let oldURL = mediaDir.appendingPathComponent(name)
+            let newURL = txtDir.appendingPathComponent(name)
+
+            // Уже в служебной папке — пропускаем. Если и там и там лежит — старый удаляем.
+            let newExists = fm.fileExists(atPath: newURL.path)
+            let oldExists = fm.fileExists(atPath: oldURL.path)
+
+            if newExists, oldExists {
+                try? fm.removeItem(at: oldURL)
+                continue
+            }
+            if newExists { continue }
+            guard oldExists else { continue }
+
+            do {
+                try fm.moveItem(at: oldURL, to: newURL)
+            } catch {
+                print("⚠️ migrate transcript failed: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    /// Чистит «осиротевшие» .txt в медиа-папках: записи в JSON для них нет
+    /// (или это дубликат уже мигрировавшего транскрипта). Безопасно: трогаем
+    /// только файлы, чьё имя точно соответствует нашему шаблону `YYYY-MM-DD_HHmmss.txt`
+    /// (так формирует AudioRecorder.makeOutputURL) — пользовательские .txt в этой
+    /// папке не пострадают. Отправляем в Корзину, чтобы можно было вернуть.
+    private func sweepStrayTranscriptsFromMediaFolders() {
+        let fm = FileManager.default
+
+        // Все папки, в которых могли осесть наши .txt.
+        var dirs: Set<String> = []
+        for rec in recordings { dirs.insert(mediaDirectory(for: rec).path) }
+        dirs.insert(AppSettings.defaultRecordingsDirectory().path)
+        if let user = try? AppSettings.recordingsDirectory() { dirs.insert(user.path) }
+
+        let pattern = #"^\d{4}-\d{2}-\d{2}_\d{6}\.txt$"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return }
+
+        for dirPath in dirs {
+            guard let items = try? fm.contentsOfDirectory(atPath: dirPath) else { continue }
+            for name in items {
+                let range = NSRange(name.startIndex..<name.endIndex, in: name)
+                guard regex.firstMatch(in: name, range: range) != nil else { continue }
+                let url = URL(fileURLWithPath: dirPath).appendingPathComponent(name)
+                var trashed: NSURL?
+                try? fm.trashItem(at: url, resultingItemURL: &trashed)
+            }
+        }
+    }
+
     /// На прошлых версиях оставались .summary.md и .vtt в каталоге — чистим.
     private func cleanupOrphanedSummaries() {
         guard let dir = try? AudioRecorder.documentsDirectory() else { return }
@@ -129,9 +300,40 @@ final class RecordingsStore {
 
     // MARK: - Pipeline
 
+    /// Последовательно обрабатывает записи, накопившиеся пока модель скачивалась.
+    func processPendingTranscriptions() async {
+        guard ModelManager.shared.isReady, !isProcessingPending else { return }
+        isProcessingPending = true
+        defer { isProcessingPending = false }
+
+        let pendingIDs = recordings
+            .filter { $0.status == .pending }
+            .map(\.id)
+
+        for id in pendingIDs {
+            guard ModelManager.shared.isReady,
+                  let recording = recordings.first(where: { $0.id == id }),
+                  recording.status == .pending else { continue }
+
+            guard canRetryTranscription(recording) else {
+                update(id: id) { $0.status = .failed }
+                continue
+            }
+
+            let audioURL = mediaDirectory(for: recording)
+                .appendingPathComponent(recording.audioFileName)
+            update(id: id) { $0.status = .transcribing }
+            await runTranscription(id: id, audioURL: audioURL)
+        }
+    }
+
     private func runTranscription(id: UUID, audioURL: URL) async {
         do {
-            let txtURL = try await TranscriptionService.transcribe(audioURL: audioURL)
+            let outputDir = try AppSettings.transcriptsDirectory()
+            let txtURL = try await TranscriptionService.transcribe(
+                audioURL: audioURL,
+                outputDirectory: outputDir
+            )
             await MainActor.run {
                 self.update(id: id) {
                     $0.transcriptFileName = txtURL.lastPathComponent
@@ -202,8 +404,8 @@ final class RecordingsStore {
         if !recording.audioFileName.isEmpty {
             try? fm.removeItem(at: dir.appendingPathComponent(recording.audioFileName))
         }
-        if let txt = recording.transcriptFileName {
-            try? fm.removeItem(at: dir.appendingPathComponent(txt))
+        if let txtURL = recording.transcriptURL() {
+            try? fm.removeItem(at: txtURL)
         }
     }
 

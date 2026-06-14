@@ -9,6 +9,7 @@ struct RecordingDetailView: View {
     let recordingID: Recording.ID
     @Bindable var store: RecordingsStore
     @Environment(\.dismiss) private var dismiss
+    @Environment(ModelManager.self) private var modelManager
 
     @State private var player = AudioPlayerModel()
     @State private var isEditingTitle = false
@@ -135,6 +136,8 @@ struct RecordingDetailView: View {
                     actionButtonLabel("Повторить транскрибацию", assetName: "RefreshReverse")
                 }
                 .buttonStyle(.bordered)
+                .disabled(!modelManager.isReady)
+                .help(modelManager.isReady ? "" : "Доступно после загрузки модели")
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -201,7 +204,16 @@ struct RecordingDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 switch rec.status {
-                case .pending, .transcribing:
+                case .pending:
+                    statusBlock(
+                        modelManager.isReady
+                            ? "Ожидает транскрибации…"
+                            : "Ждёт загрузки модели распознавания…",
+                        isError: false,
+                        showsProgress: modelManager.isReady,
+                        recording: rec
+                    )
+                case .transcribing:
                     statusBlock("Транскрибируется…", isError: false, recording: rec)
                 case .failed:
                     statusBlock("Не удалось создать транскрипцию", isError: true, recording: rec)
@@ -221,13 +233,20 @@ struct RecordingDetailView: View {
     }
 
     @ViewBuilder
-    private func statusBlock(_ text: String, isError: Bool, recording rec: Recording) -> some View {
+    private func statusBlock(
+        _ text: String,
+        isError: Bool,
+        showsProgress: Bool = true,
+        recording rec: Recording
+    ) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 10) {
                 if isError {
                     Image(systemName: "exclamationmark.triangle").foregroundStyle(.red)
-                } else {
+                } else if showsProgress {
                     ProgressView().controlSize(.small)
+                } else {
+                    Image(systemName: "clock").foregroundStyle(.secondary)
                 }
                 Text(text).foregroundStyle(isError ? .red : .secondary)
             }
@@ -237,6 +256,8 @@ struct RecordingDetailView: View {
                 } label: {
                     Label("Повторить транскрибацию", systemImage: "arrow.clockwise")
                 }
+                .disabled(!modelManager.isReady)
+                .help(modelManager.isReady ? "" : "Доступно после загрузки модели")
             } else if isError {
                 Text("Аудио уже удалено по политике хранения — повторная транскрипция невозможна.")
                     .font(.caption)
@@ -260,13 +281,11 @@ struct RecordingDetailView: View {
     }
 
     private func loadTranscript(for rec: Recording) {
-        guard let name = rec.transcriptFileName else {
+        guard let url = rec.transcriptURL() else {
             transcriptText = nil
             return
         }
         do {
-            let dir = rec.storageDirectoryURL()
-            let url = dir.appendingPathComponent(name)
             transcriptText = try String(contentsOf: url, encoding: .utf8)
         } catch {
             transcriptText = nil

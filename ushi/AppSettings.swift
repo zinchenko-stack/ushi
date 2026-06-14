@@ -196,6 +196,17 @@ enum AppSettings {
         return dir
     }
 
+    /// Папка для транскриптов (.txt). Отделена от пользовательской папки с медиа,
+    /// чтобы Finder в «куда сохранять» не был засорён служебными файлами.
+    static func transcriptsDirectory() throws -> URL {
+        let fm = FileManager.default
+        let dir = try metadataDirectory().appendingPathComponent("transcripts", isDirectory: true)
+        if !fm.fileExists(atPath: dir.path) {
+            try fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        }
+        return dir
+    }
+
     static func defaultRecordingsDirectory() -> URL {
         legacyDefaultRecordingsDirectory()
     }

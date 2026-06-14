@@ -17,7 +17,7 @@ import AppKit
 
 /// URL манифеста с информацией о последней версии. Замени на свой,
 /// когда настроишь GitHub Releases / GitHub Pages / S3 / любой статический хостинг.
-private let manifestURL = URL(string: "https://example.com/ushi/latest-mac.json")!
+private let manifestURL = URL(string: "https://github.com/zinchenko-stack/ushi/releases/latest/download/latest-mac.json")!
 
 @Observable
 final class UpdateChecker {

@@ -18,31 +18,37 @@ struct RecordingView: View {
     @State private var savedRecording: Recording?     // показанный тост (nil = скрыт)
     @State private var toastTask: Task<Void, Never>?
 
+    // Обратный отсчёт перед стартом: успеть переключиться в нужное окно,
+    // не записывая лишнего. Тап по кнопке во время отсчёта = отмена.
+    @State private var countdown: Int?
+    @State private var countdownTask: Task<Void, Never>?
+    private let countdownStart = 3
+
     var body: some View {
         VStack(spacing: 32) {
             Spacer()
 
-            Text(formatTime(recorder.elapsed))
-                .font(.system(size: 80, weight: .medium, design: .rounded).monospacedDigit())
-                .foregroundStyle(.primary)
-                .contentTransition(.numericText())
+            Group {
+                if let cd = countdown {
+                    Text("\(cd)")
+                        .foregroundStyle(Color.accentColor)
+                } else {
+                    Text(formatTime(recorder.elapsed))
+                        .foregroundStyle(.primary)
+                }
+            }
+            .font(.system(size: 80, weight: .medium, design: .rounded).monospacedDigit())
+            .contentTransition(.numericText())
+            .animation(.easeInOut(duration: 0.15), value: countdown)
 
             Button {
-                guard activeTask == nil else { return }
-                activeTask = Task {
-                    await toggle()
-                    activeTask = nil
-                }
+                handleTap()
             } label: {
                 ZStack {
                     Circle()
-                        .fill(recorder.isRecording ? Color.red : Color.accentColor)
+                        .fill(buttonFill)
                         .frame(width: 120, height: 120)
-                    // Красная точка = универсальный «record» (Voice Memos / QuickTime),
-                    // белый квадрат = stop. Mic-иконка остаётся только у пилюли-переключателя.
-                    Image(systemName: recorder.isRecording ? "stop.fill" : "circle.fill")
-                        .font(.system(size: recorder.isRecording ? 44 : 40))
-                        .foregroundStyle(.white)
+                    buttonGlyph
                 }
                 .opacity(isWorking ? 0.5 : 1)
             }
@@ -149,7 +155,34 @@ struct RecordingView: View {
 
     private var statusText: String {
         if isWorking { return "Подождите…" }
+        if countdown != nil { return "Нажмите, чтобы отменить" }
         return recorder.isRecording ? "Идёт запись…" : "Нажмите, чтобы начать"
+    }
+
+    private var buttonFill: Color {
+        if recorder.isRecording { return .red }
+        if countdown != nil { return .secondary.opacity(0.6) }
+        return .accentColor
+    }
+
+    @ViewBuilder
+    private var buttonGlyph: some View {
+        if recorder.isRecording {
+            Image(systemName: "stop.fill")
+                .font(.system(size: 44))
+                .foregroundStyle(.white)
+        } else if countdown != nil {
+            // X = «отменить отсчёт»: визуально это не stop (та же серая палитра, что и mute),
+            // не вводит в заблуждение «уже идёт запись».
+            Image(systemName: "xmark")
+                .font(.system(size: 40, weight: .semibold))
+                .foregroundStyle(.white)
+        } else {
+            // Красная точка = универсальный «record» (Voice Memos / QuickTime).
+            Image(systemName: "circle.fill")
+                .font(.system(size: 40))
+                .foregroundStyle(.white)
+        }
     }
 
     private var levelColor: Color {
@@ -189,20 +222,65 @@ struct RecordingView: View {
         .help(recorder.isRecording ? "Поменять можно только до старта записи" : help)
     }
 
-    private func toggle() async {
+    private func handleTap() {
         guard !isWorking else { return }
+
+        // Идёт обратный отсчёт → отменяем и выходим, ничего не запуская.
+        if countdown != nil {
+            countdownTask?.cancel()
+            countdownTask = nil
+            countdown = nil
+            return
+        }
+
+        // Идёт запись → стоп.
+        if recorder.isRecording {
+            guard activeTask == nil else { return }
+            activeTask = Task {
+                await stopRecording()
+                activeTask = nil
+            }
+            return
+        }
+
+        // Иначе — начинаем с обратного отсчёта.
+        errorMessage = nil
+        countdownTask = Task { await runCountdownThenStart() }
+    }
+
+    private func runCountdownThenStart() async {
+        for n in stride(from: countdownStart, through: 1, by: -1) {
+            countdown = n
+            do {
+                try await Task.sleep(for: .seconds(1))
+            } catch {
+                countdown = nil
+                return
+            }
+            if Task.isCancelled {
+                countdown = nil
+                return
+            }
+        }
+        countdown = nil
+        countdownTask = nil
+
         isWorking = true
         defer { isWorking = false }
-        errorMessage = nil
-
         do {
-            if recorder.isRecording {
-                let result = try await recorder.stop()
-                let rec = store.addRecording(audioURL: result.url, duration: result.duration)
-                showSavedToast(rec)
-            } else {
-                try await recorder.start()
-            }
+            try await recorder.start()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func stopRecording() async {
+        isWorking = true
+        defer { isWorking = false }
+        do {
+            let result = try await recorder.stop()
+            let rec = store.addRecording(audioURL: result.url, duration: result.duration)
+            showSavedToast(rec)
         } catch {
             errorMessage = error.localizedDescription
         }
