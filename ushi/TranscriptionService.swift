@@ -40,6 +40,10 @@ struct TranscriptionService {
         return home.appendingPathComponent(".ushi/models/ggml-large-v3-turbo.bin")
     }
 
+    static func isModelInstalled() -> Bool {
+        FileManager.default.fileExists(atPath: modelURL().path)
+    }
+
     static func vadModelURL() -> URL {
         let home = FileManager.default.homeDirectoryForCurrentUser
         return home.appendingPathComponent(".ushi/models/ggml-silero-v5.1.2.bin")
