@@ -5,6 +5,7 @@
 
 import Foundation
 import Observation
+import CryptoKit
 
 @MainActor
 @Observable
@@ -22,6 +23,10 @@ final class ModelManager {
     private static let defaultDownloadURL = URL(
         string: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin"
     )!
+    /// Известный SHA-256 ggml-large-v3-turbo.bin с HuggingFace.
+    /// Сверен с актуальным файлом 2026-06-14. Если HF обновит модель — этот хеш надо обновить.
+    private static let expectedModelSHA256 =
+        "1fc70f774d38eb169993ac391eea357ef47c88757ef72ee5943879b7e8e2bc69"
     private static let minimumFreeSpace: Int64 = 2_000_000_000
     private static let dismissedOnboardingKey = "ushi.onboarding.dismissed"
 
@@ -213,7 +218,12 @@ final class ModelManager {
 
     fileprivate func didFinishDownload() {
         downloadTask = nil
+        Task { @MainActor in
+            await finalizeDownload()
+        }
+    }
 
+    private func finalizeDownload() async {
         do {
             let attributes = try fileManager.attributesOfItem(atPath: stagingURL.path)
             guard let fileSize = attributes[.size] as? NSNumber,
@@ -227,6 +237,14 @@ final class ModelManager {
                 throw ModelDownloadError.incompleteDownload
             }
 
+            let stagingPath = stagingURL.path
+            let actualHash = try await Task.detached(priority: .userInitiated) {
+                try Self.computeSHA256(ofFileAt: stagingPath)
+            }.value
+            guard actualHash.caseInsensitiveCompare(Self.expectedModelSHA256) == .orderedSame else {
+                throw ModelDownloadError.checksumMismatch
+            }
+
             try? fileManager.removeItem(at: modelURL)
             try fileManager.moveItem(at: stagingURL, to: modelURL)
             try? fileManager.removeItem(at: resumeDataURL)
@@ -236,6 +254,22 @@ final class ModelManager {
             try? fileManager.removeItem(at: stagingURL)
             state = .failed(error.localizedDescription)
         }
+    }
+
+    /// Стриминговый SHA-256 для больших файлов — не грузит 1.5ГБ в память.
+    /// Вызывается вне MainActor (через Task.detached).
+    nonisolated private static func computeSHA256(ofFileAt path: String) throws -> String {
+        let handle = try FileHandle(forReadingFrom: URL(fileURLWithPath: path))
+        defer { try? handle.close() }
+        var hasher = SHA256()
+        let chunkSize = 1024 * 1024
+        while true {
+            let chunk = handle.readData(ofLength: chunkSize)
+            if chunk.isEmpty { break }
+            hasher.update(data: chunk)
+        }
+        let digest = hasher.finalize()
+        return digest.map { String(format: "%02x", $0) }.joined()
     }
 
     func dismissOnboarding() {
@@ -314,6 +348,7 @@ private enum ModelDownloadError: LocalizedError {
     case insufficientDiskSpace
     case invalidDownload
     case incompleteDownload
+    case checksumMismatch
     case serverError(Int)
 
     var errorDescription: String? {
@@ -324,6 +359,8 @@ private enum ModelDownloadError: LocalizedError {
             return "Сервер вернул пустой файл модели. Попробуйте скачать ещё раз."
         case .incompleteDownload:
             return "Модель скачалась не полностью. Попробуйте продолжить скачивание."
+        case .checksumMismatch:
+            return "Скачанный файл повреждён (контрольная сумма не совпала). Нажмите «Повторить»."
         case .serverError(let statusCode):
             return "Сервер не смог отдать модель (HTTP \(statusCode)). Попробуйте позже."
         }

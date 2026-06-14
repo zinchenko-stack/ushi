@@ -2,7 +2,9 @@
 //  TranscriptionService.swift
 //  ushi
 //
-//  Локальная транскрипция через whisper.cpp (бинарь whisper-cli из Homebrew).
+//  Локальная транскрипция через whisper.cpp. Бинарь whisper-cli бандлится
+//  в ushi.app/Contents/Resources/ (статический, Metal embedded, см. Phase 2).
+//  Fallback на /opt/homebrew/bin/whisper-cli для разработки.
 //  Шаги: m4a -> wav (afconvert) -> whisper-cli -> .txt
 //
 
@@ -17,11 +19,11 @@ enum TranscriptionError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .binaryNotFound(let path): return "Не найден whisper-cli по пути: \(path). Установите: brew install whisper-cpp"
-        case .modelNotFound(let path):  return "Не найдена модель по пути: \(path)"
-        case .conversionFailed(let msg): return "Конвертация m4a→wav упала: \(msg)"
-        case .whisperFailed(let msg):   return "whisper-cli упал: \(msg)"
-        case .outputMissing:            return "whisper-cli не создал .txt"
+        case .binaryNotFound:           return "Не удалось найти распознавалку речи внутри приложения. Это баг сборки — напиши автору."
+        case .modelNotFound:            return "Модель распознавания речи не установлена. Перезапусти Ushi — должно открыться окно скачивания."
+        case .conversionFailed(let msg): return "Не удалось подготовить аудио к распознаванию: \(msg)"
+        case .whisperFailed(let msg):   return "Распознавалка завершилась с ошибкой: \(msg)"
+        case .outputMissing:            return "Распознавалка не создала текстовый файл — попробуй ещё раз."
         }
     }
 }
