@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ushi — запись звука и экрана на Mac</title>
+  <meta name="description" content="Приложение, которое записывает звук и экран для важного, и превращает это в текст с удобным поиском.">
+  <meta property="og:title" content="Ushi — записывай важное">
+  <meta property="og:description" content="Записывает звук и экран, превращает в текст с удобным поиском.">
+  <meta property="og:type" content="website">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #f6f5f4;
+      --container-primary: #ffffff;
+      --element-primary: #101010;
+      --element-secondary: #54585c;
+      --element-tertiary: #abafb2;
+      --element-accent: #2d53dd;
+      --element-inverse: #ffffff;
+      --gradient-from: #3460ff;
+      --gradient-to: #1f3a99;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      min-height: 100%;
+      font-family: "Onest", -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+      background: var(--bg);
+      color: var(--element-primary);
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 40px 24px;
+    }
+
+    main {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: 100%;
+      max-width: 944px;
+      gap: 20px;
+    }
+
+    .pill {
+      background: var(--container-primary);
+      border-radius: 24px;
+      padding: 4px 16px 4px 12px;
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .pill .logo-square {
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
+      background: linear-gradient(to bottom, var(--gradient-from), var(--gradient-to));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .pill .logo-square svg {
+      width: 20px;
+      height: 20px;
+      display: block;
+    }
+
+    .pill .brand {
+      font-family: "Onest", sans-serif;
+      font-weight: 800;
+      font-size: 28px;
+      line-height: 40px;
+      color: var(--element-accent);
+      letter-spacing: -0.5px;
+    }
+
+    h1 {
+      font-family: "Onest", sans-serif;
+      font-weight: 800;
+      font-size: 56px;
+      line-height: 60px;
+      letter-spacing: -1.5px;
+      text-align: center;
+      padding-top: 8px;
+      max-width: 800px;
+    }
+
+    h1 .muted {
+      color: var(--element-tertiary);
+      display: block;
+    }
+
+    h1 .accent {
+      color: var(--element-primary);
+      display: block;
+    }
+
+    .lead {
+      font-family: "Onest", sans-serif;
+      font-weight: 400;
+      font-size: 18px;
+      line-height: 32px;
+      letter-spacing: -0.36px;
+      color: var(--element-primary);
+      text-align: center;
+      max-width: 520px;
+      margin-top: 20px;
+    }
+
+    .action {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      margin-top: 28px;
+      padding-top: 8px;
+    }
+
+    .cta {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--element-accent);
+      color: var(--element-inverse);
+      text-decoration: none;
+      padding: 10px 24px;
+      border-radius: 16px;
+      font-family: "Onest", sans-serif;
+      font-weight: 500;
+      font-size: 15px;
+      line-height: 22px;
+      letter-spacing: -0.3px;
+      transition: background 0.15s ease, transform 0.15s ease;
+    }
+
+    .cta:hover {
+      background: #2647c4;
+    }
+
+    .cta:active {
+      transform: scale(0.98);
+    }
+
+    .cta .apple-icon {
+      width: 14px;
+      height: 17px;
+      display: block;
+    }
+
+    .caption {
+      font-family: "Onest", sans-serif;
+      font-weight: 400;
+      font-size: 14px;
+      line-height: 20px;
+      letter-spacing: -0.14px;
+      color: var(--element-secondary);
+      text-align: center;
+    }
+
+    /* Mobile */
+    @media (max-width: 640px) {
+      body {
+        padding: 24px 20px;
+      }
+      h1 {
+        font-size: 36px;
+        line-height: 40px;
+        letter-spacing: -1px;
+      }
+      .pill .brand {
+        font-size: 24px;
+        line-height: 32px;
+      }
+      .pill .logo-square {
+        width: 36px;
+        height: 36px;
+        border-radius: 10px;
+      }
+      .pill .logo-square svg {
+        width: 18px;
+        height: 18px;
+      }
+      .lead {
+        font-size: 16px;
+        line-height: 26px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="pill">
+      <span class="logo-square">
+        <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <path d="M15.6083 14.269V5.10538C15.6083 4.91276 15.5243 4.69596 15.3207 4.51319C15.1126 4.3265 14.8045 4.20239 14.4598 4.20236C14.1149 4.20236 13.8069 4.32649 13.5988 4.51319C13.3951 4.69598 13.3107 4.91272 13.3106 5.10538V16.902C13.3106 17.7704 12.9249 18.5713 12.2924 19.1389C11.6642 19.7025 10.8379 20.0001 10 20.0001C9.16212 20.0001 8.33578 19.7026 7.70757 19.1389C7.07507 18.5713 6.68942 17.7704 6.68936 16.902V9.20406C6.68931 9.0114 6.60487 8.79466 6.40116 8.61188C6.19311 8.42526 5.88545 8.3011 5.54078 8.30104C5.19599 8.30104 4.88795 8.42519 4.67986 8.61188C4.47615 8.79466 4.39171 9.0114 4.39166 9.20406V16.3178C4.39166 17.1864 4.006 17.9877 3.37345 18.5553C2.74523 19.1189 1.91888 19.4165 1.08102 19.4165C0.484048 19.4165 9.30356e-05 18.925 0 18.3189C0 17.7128 0.483991 17.2214 1.08102 17.2214C1.42583 17.2214 1.73384 17.0972 1.94194 16.9105C2.14571 16.7277 2.22961 16.5105 2.22961 16.3178V9.20406C2.22966 8.33563 2.61539 7.53469 3.24782 6.96715C3.87606 6.40344 4.70286 6.10593 5.54078 6.10593C6.37861 6.10599 7.20502 6.40349 7.8332 6.96715C8.46566 7.53469 8.85136 8.33561 8.85141 9.20406V16.902C8.85147 17.0946 8.93545 17.3114 9.13909 17.4941C9.34716 17.6808 9.65521 17.8049 10 17.805C10.3448 17.805 10.6528 17.6809 10.8609 17.4941C11.0646 17.3114 11.1485 17.0946 11.1486 16.902V5.10538C11.1486 4.23697 11.5344 3.436 12.1668 2.86847C12.795 2.30476 13.6218 2.00725 14.4598 2.00725C15.2976 2.00728 16.124 2.30479 16.7522 2.86847C17.3847 3.43601 17.7703 4.2369 17.7704 5.10538V14.269C17.7704 14.4617 17.8548 14.6783 18.0586 14.8612C18.2666 15.0478 18.5743 15.172 18.919 15.172C19.516 15.172 19.9999 15.6635 20 16.2696C20 16.8757 19.516 17.3671 18.919 17.3671C18.0811 17.3671 17.2547 17.0696 16.6265 16.5059C15.9941 15.9383 15.6083 15.1375 15.6083 14.269Z" fill="white"/>
+          <path d="M7.8402 2.19519C7.8402 3.40752 6.87221 4.3903 5.67815 4.3903C4.48408 4.3903 3.5161 3.40752 3.5161 2.19519C3.5161 0.982866 4.48408 8.15392e-05 5.67815 8.15392e-05C6.87221 8.15392e-05 7.8402 0.982866 7.8402 2.19519Z" fill="white"/>
+        </svg>
+      </span>
+      <span class="brand">Ushi</span>
+    </div>
+
+    <h1>
+      <span class="muted">Не теряй суть.</span>
+      <span class="accent">Записывай важное</span>
+    </h1>
+
+    <p class="lead">Приложение, которое записывает звук и экран для важного, и превращает это в текст с удобным поиском.</p>
+
+    <div class="action">
+      <a class="cta" href="https://github.com/zinchenko-stack/ushi/releases/latest/download/ushi.dmg">
+        <svg class="apple-icon" viewBox="0 0 13.838 17" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <path d="M13.3977 5.7953C13.2991 5.8718 11.5583 6.8527 11.5583 9.0338C11.5583 11.5566 13.7734 12.4491 13.8397 12.4712C13.8295 12.5256 13.4878 13.6935 12.6718 14.8835C11.9442 15.9307 11.1843 16.9762 10.0283 16.9762C8.8723 16.9762 8.5748 16.3047 7.2403 16.3047C5.9398 16.3047 5.4774 16.9983 4.42 16.9983C3.3626 16.9983 2.6248 16.0293 1.7765 14.8393C0.7939 13.4419 0 11.271 0 9.2106C0 5.9058 2.1488 4.1531 4.2636 4.1531C5.3873 4.1531 6.324 4.8909 7.0295 4.8909C7.701 4.8909 8.7482 4.1089 10.0266 4.1089C10.5111 4.1089 12.2519 4.1531 13.3977 5.7953ZM9.4197 2.7098C9.9484 2.0825 10.3224 1.2121 10.3224 0.3417C10.3224 0.221 10.3122 0.0986 10.2901 0C9.4299 0.0323 8.4065 0.5729 7.7894 1.2886C7.3049 1.8394 6.8527 2.7098 6.8527 3.5921C6.8527 3.7247 6.8748 3.8573 6.885 3.8998C6.9394 3.91 7.0278 3.9219 7.1162 3.9219C7.888 3.9219 8.8587 3.4051 9.4197 2.7098Z" fill="white"/>
+        </svg>
+        <span>Скачать на Mac</span>
+      </a>
+      <p class="caption">Доступно только с MacOS</p>
+    </div>
+  </main>
+</body>
+</html>
