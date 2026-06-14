@@ -50,7 +50,12 @@ struct TranscriptionService {
         "https://huggingface.co/ggml-org/whisper-vad/resolve/main/ggml-silero-v5.1.2.bin")!
 
     private static func resolveBinary() -> String? {
-        binaryCandidates.first { FileManager.default.fileExists(atPath: $0) }
+        if let bundled = Bundle.main.url(forResource: "whisper-cli", withExtension: nil),
+           FileManager.default.fileExists(atPath: bundled.path) {
+            return bundled.path
+        }
+
+        return binaryCandidates.first { FileManager.default.fileExists(atPath: $0) }
     }
 
     /// Гарантирует наличие VAD-модели: если нет — пытается скачать.
