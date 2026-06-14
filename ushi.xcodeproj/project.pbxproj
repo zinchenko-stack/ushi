@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		5B0000012FE0000000000001 /* whisper-cli in Embed Whisper CLI */ = {isa = PBXBuildFile; fileRef = 5B0000022FE0000000000001 /* whisper-cli */; };
+		5B0000012FE0000000000001 /* vendor/whisper.cpp/build/bin/whisper-cli in Embed Whisper CLI */ = {isa = PBXBuildFile; fileRef = 5B0000022FE0000000000001 /* vendor/whisper.cpp/build/bin/whisper-cli */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -17,7 +17,7 @@
 			dstPath = "";
 			dstSubfolderSpec = 7;
 			files = (
-				5B0000012FE0000000000001 /* whisper-cli in Embed Whisper CLI */,
+				5B0000012FE0000000000001 /* vendor/whisper.cpp/build/bin/whisper-cli in Embed Whisper CLI */,
 			);
 			name = "Embed Whisper CLI";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -25,8 +25,8 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		5B0000022FE0000000000001 /* whisper-cli */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; path = vendor/whisper.cpp/build/bin/whisper-cli; sourceTree = SOURCE_ROOT; };
 		5AA1864D2FDC1EC3003CEF9F /* ushi.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ushi.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		5B0000022FE0000000000001 /* vendor/whisper.cpp/build/bin/whisper-cli */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; path = "vendor/whisper.cpp/build/bin/whisper-cli"; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -65,7 +65,7 @@
 			isa = PBXGroup;
 			children = (
 				5AA1864F2FDC1EC3003CEF9F /* ushi */,
-				5B0000022FE0000000000001 /* whisper-cli */,
+				5B0000022FE0000000000001 /* vendor/whisper.cpp/build/bin/whisper-cli */,
 				5AA1864E2FDC1EC3003CEF9F /* Products */,
 			);
 			sourceTree = "<group>";

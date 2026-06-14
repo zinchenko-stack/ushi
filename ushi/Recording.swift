@@ -23,6 +23,11 @@ struct Recording: Identifiable, Codable, Hashable {
     var status: ProcessingStatus
     /// true если .m4a удалён по политике хранения (старше 7 дней). Транскрипт остаётся.
     var audioRemoved: Bool
+    /// «Штрих-код» аудио/видео файла — выживает переименование и перемещение
+    /// в подпапки. Опционален: nil у старых записей, мигрируется на первом резолве.
+    var audioBookmark: Data?
+    /// Аналогично для .txt транскрипта.
+    var transcriptBookmark: Data?
 
     init(
         id: UUID = UUID(),
@@ -33,7 +38,9 @@ struct Recording: Identifiable, Codable, Hashable {
         transcriptFileName: String? = nil,
         storageFolderPath: String? = nil,
         status: ProcessingStatus = .pending,
-        audioRemoved: Bool = false
+        audioRemoved: Bool = false,
+        audioBookmark: Data? = nil,
+        transcriptBookmark: Data? = nil
     ) {
         self.id = id
         self.title = title
@@ -44,6 +51,8 @@ struct Recording: Identifiable, Codable, Hashable {
         self.storageFolderPath = storageFolderPath
         self.status = status
         self.audioRemoved = audioRemoved
+        self.audioBookmark = audioBookmark
+        self.transcriptBookmark = transcriptBookmark
     }
 
     // MARK: - Совместимость со старым JSON
@@ -57,6 +66,7 @@ struct Recording: Identifiable, Codable, Hashable {
         case id, title, createdAt, duration
         case audioFileName, transcriptFileName, storageFolderPath
         case status, audioRemoved
+        case audioBookmark, transcriptBookmark
         case transcriptionStatus // legacy
     }
 
@@ -70,6 +80,8 @@ struct Recording: Identifiable, Codable, Hashable {
         transcriptFileName = try c.decodeIfPresent(String.self, forKey: .transcriptFileName)
         storageFolderPath = try c.decodeIfPresent(String.self, forKey: .storageFolderPath)
         audioRemoved = try c.decodeIfPresent(Bool.self, forKey: .audioRemoved) ?? false
+        audioBookmark = try c.decodeIfPresent(Data.self, forKey: .audioBookmark)
+        transcriptBookmark = try c.decodeIfPresent(Data.self, forKey: .transcriptBookmark)
 
         // Сначала пробуем новый статус, потом legacy. Снятые статусы
         // (extracting/summarizing) маппим как незавершённую обработку.
@@ -109,6 +121,8 @@ struct Recording: Identifiable, Codable, Hashable {
         try c.encodeIfPresent(storageFolderPath, forKey: .storageFolderPath)
         try c.encode(status, forKey: .status)
         try c.encode(audioRemoved, forKey: .audioRemoved)
+        try c.encodeIfPresent(audioBookmark, forKey: .audioBookmark)
+        try c.encodeIfPresent(transcriptBookmark, forKey: .transcriptBookmark)
     }
 
     func storageDirectoryURL() -> URL {
@@ -124,10 +138,44 @@ struct Recording: Identifiable, Codable, Hashable {
         try? AppSettings.transcriptsDirectory()
     }
 
-    /// Полный путь к .txt, если он есть.
+    /// Полный путь к .txt, если он есть (по имени + папке).
+    /// Не использует bookmark — это синхронный legacy-доступ. Для надёжного резолва
+    /// зови `resolveTranscriptURL()`.
     func transcriptURL() -> URL? {
         guard let name = transcriptFileName, !name.isEmpty,
               let dir = transcriptDirectoryURL() else { return nil }
         return dir.appendingPathComponent(name)
+    }
+
+    // MARK: - Bookmark-based резолверы
+
+    /// Найти актуальный URL аудио-файла. Возвращает (url, freshBookmark):
+    /// url — найденный файл; freshBookmark — обновлённая версия bookmark, которую
+    /// store должен сохранить (если bookmark был stale или мы его создали по fallback).
+    /// nil-кортеж означает что файл потерян, и резолвер не смог его найти.
+    func resolveAudioURL() -> (url: URL, freshBookmark: Data?)? {
+        // 1. Bookmark — самый надёжный путь (выживает переименование/перемещение)
+        if let bm = audioBookmark, let res = FileBookmark.resolve(bm) {
+            return (res.url, res.freshBookmark)
+        }
+        // 2. Fallback: storageFolderPath + audioFileName (как было раньше)
+        let fallback = storageDirectoryURL().appendingPathComponent(audioFileName)
+        if FileManager.default.fileExists(atPath: fallback.path) {
+            // Создаём bookmark на будущее (миграция старых записей)
+            return (fallback, FileBookmark.create(from: fallback))
+        }
+        return nil
+    }
+
+    /// Аналогично для транскрипта.
+    func resolveTranscriptURL() -> (url: URL, freshBookmark: Data?)? {
+        if let bm = transcriptBookmark, let res = FileBookmark.resolve(bm) {
+            return (res.url, res.freshBookmark)
+        }
+        if let fallback = transcriptURL(),
+           FileManager.default.fileExists(atPath: fallback.path) {
+            return (fallback, FileBookmark.create(from: fallback))
+        }
+        return nil
     }
 }

@@ -100,9 +100,32 @@ struct RecordingDetailView: View {
     }
 
     private func openExternally(_ rec: Recording) {
-        let dir = rec.storageDirectoryURL()
-        let url = dir.appendingPathComponent(rec.audioFileName)
-        guard FileManager.default.fileExists(atPath: url.path) else { return }
+        if let (url, fresh) = rec.resolveAudioURL() {
+            if let fresh { store.setAudioBookmark(for: rec.id, fresh) }
+            NSWorkspace.shared.open(url)
+            return
+        }
+        promptToLocate(rec)
+    }
+
+    /// Файл не найден — спрашиваем пользователя где он сейчас.
+    private func promptToLocate(_ rec: Recording) {
+        let alert = NSAlert()
+        alert.messageText = "Файл не найден"
+        alert.informativeText = "Похоже, «\(rec.title)» был перемещён, переименован или удалён. Указать его расположение вручную?"
+        alert.addButton(withTitle: "Указать")
+        alert.addButton(withTitle: "Отмена")
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        panel.message = "Найдите файл «\(rec.audioFileName)»"
+        panel.directoryURL = rec.storageDirectoryURL()
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+
+        store.relocateAudio(for: rec.id, to: url)
         NSWorkspace.shared.open(url)
     }
 
@@ -274,17 +297,17 @@ struct RecordingDetailView: View {
     private func loadAudio(for rec: Recording) {
         // AVAudioPlayer открывает .mov по аудиодорожке — отдельной ветки для видео не нужно.
         guard !rec.audioFileName.isEmpty else { return }
-        let dir = rec.storageDirectoryURL()
-        let url = dir.appendingPathComponent(rec.audioFileName)
-        guard FileManager.default.fileExists(atPath: url.path) else { return }
+        guard let (url, fresh) = rec.resolveAudioURL() else { return }
+        if let fresh { store.setAudioBookmark(for: rec.id, fresh) }
         player.load(url: url)
     }
 
     private func loadTranscript(for rec: Recording) {
-        guard let url = rec.transcriptURL() else {
+        guard let (url, fresh) = rec.resolveTranscriptURL() else {
             transcriptText = nil
             return
         }
+        if let fresh { store.setTranscriptBookmark(for: rec.id, fresh) }
         do {
             transcriptText = try String(contentsOf: url, encoding: .utf8)
         } catch {

@@ -72,6 +72,10 @@ final class RecordingsStore {
                 do {
                     try fm.moveItem(at: from, to: to)
                     rec.audioFileName = to.lastPathComponent
+                    // Обновляем bookmark под новое имя (хотя bookmark пережил бы и через
+                    // inode — но явное обновление безопаснее, особенно если файл
+                    // менял volume в процессе).
+                    rec.audioBookmark = FileBookmark.create(from: to)
                 } catch {
                     print("❌ rename audio failed: \(error.localizedDescription)")
                 }
@@ -86,6 +90,7 @@ final class RecordingsStore {
                 do {
                     try fm.moveItem(at: from, to: to)
                     rec.transcriptFileName = to.lastPathComponent
+                    rec.transcriptBookmark = FileBookmark.create(from: to)
                 } catch {
                     print("❌ rename transcript failed: \(error.localizedDescription)")
                 }
@@ -145,7 +150,8 @@ final class RecordingsStore {
             duration: duration,
             audioFileName: audioURL.lastPathComponent,
             storageFolderPath: audioURL.deletingLastPathComponent().path,
-            status: canTranscribe ? .transcribing : .pending
+            status: canTranscribe ? .transcribing : .pending,
+            audioBookmark: FileBookmark.create(from: audioURL)
         )
         recordings.insert(rec, at: 0)
 
@@ -159,24 +165,24 @@ final class RecordingsStore {
     }
 
     /// Может ли запись быть перетранскрибирована (аудио ещё на диске).
+    /// Проверка через bookmark-резолвер, т.к. файл мог быть переименован/перемещён.
     func canRetryTranscription(_ recording: Recording) -> Bool {
         guard !recording.audioRemoved,
               !recording.audioFileName.isEmpty else { return false }
-        let dir = mediaDirectory(for: recording)
-        return FileManager.default.fileExists(atPath: dir.appendingPathComponent(recording.audioFileName).path)
+        return recording.resolveAudioURL() != nil
     }
 
     /// Перезапуск транскрипции (для failed или явного "перетранскрибировать").
     func retryTranscription(_ recording: Recording) {
-        let dir = mediaDirectory(for: recording)
-        let audioURL = dir.appendingPathComponent(recording.audioFileName)
-        guard FileManager.default.fileExists(atPath: audioURL.path) else { return }
+        guard let (audioURL, fresh) = recording.resolveAudioURL() else { return }
+        if let fresh { setAudioBookmark(for: recording.id, fresh) }
 
-        if let oldTxt = recording.transcriptURL() {
+        if let (oldTxt, _) = recording.resolveTranscriptURL() {
             try? FileManager.default.removeItem(at: oldTxt)
         }
         update(id: recording.id) {
             $0.transcriptFileName = nil
+            $0.transcriptBookmark = nil
             $0.status = ModelManager.shared.isReady ? .transcribing : .pending
         }
 
@@ -185,6 +191,29 @@ final class RecordingsStore {
         let recordingID = recording.id
         Task.detached(priority: .userInitiated) { [weak self] in
             await self?.runTranscription(id: recordingID, audioURL: audioURL)
+        }
+    }
+
+    // MARK: - Bookmark helpers (public)
+
+    /// Обновить аудио-bookmark для записи (например, после ручного выбора через NSOpenPanel).
+    func setAudioBookmark(for id: UUID, _ bookmark: Data) {
+        update(id: id) { $0.audioBookmark = bookmark }
+    }
+
+    /// Обновить transcript-bookmark для записи.
+    func setTranscriptBookmark(for id: UUID, _ bookmark: Data) {
+        update(id: id) { $0.transcriptBookmark = bookmark }
+    }
+
+    /// Полное обновление расположения аудио-файла: bookmark + filename + folder.
+    /// Зовём из UI после того как пользователь указал файл через NSOpenPanel.
+    func relocateAudio(for id: UUID, to url: URL) {
+        let bookmark = FileBookmark.create(from: url)
+        update(id: id) {
+            $0.audioFileName = url.lastPathComponent
+            $0.storageFolderPath = url.deletingLastPathComponent().path
+            $0.audioBookmark = bookmark
         }
     }
 
@@ -334,9 +363,11 @@ final class RecordingsStore {
                 audioURL: audioURL,
                 outputDirectory: outputDir
             )
+            let transcriptBookmark = FileBookmark.create(from: txtURL)
             await MainActor.run {
                 self.update(id: id) {
                     $0.transcriptFileName = txtURL.lastPathComponent
+                    $0.transcriptBookmark = transcriptBookmark
                     $0.status = .done
                 }
             }
@@ -400,11 +431,11 @@ final class RecordingsStore {
 
     private func deleteFiles(for recording: Recording) {
         let fm = FileManager.default
-        let dir = mediaDirectory(for: recording)
-        if !recording.audioFileName.isEmpty {
-            try? fm.removeItem(at: dir.appendingPathComponent(recording.audioFileName))
+        // Идём через резолвер — он находит файл даже если был переименован/перемещён.
+        if let (audioURL, _) = recording.resolveAudioURL() {
+            try? fm.removeItem(at: audioURL)
         }
-        if let txtURL = recording.transcriptURL() {
+        if let (txtURL, _) = recording.resolveTranscriptURL() {
             try? fm.removeItem(at: txtURL)
         }
     }
