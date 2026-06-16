@@ -35,8 +35,13 @@
    
    `RecordingsStore` адаптируй под новую схему: убрать JSON-хранилище, читать из GRDB. Сохраняй immutable snapshot пресета при создании записи.
 6. **app.lastUsedPreset.** В `app_state` пара `("global_last_preset", "micOnly")`. Хелперы `AppState.lastUsedPreset` getter/setter — обновляются после каждой orphan-записи.
-7. **Миграция текущих записей.** Если в `~/Library/Application Support/UshiNext/` есть данные из старого Ushi (могут не быть — это новая папка) — не трогай. Перенос из старого Ushi — отдельная задача Phase 6.
-8. **Юнит-тесты.** Для `ProjectStore` минимум:
+7. **Где физически живут файлы записей.**
+   - Managed-Проекты: `~/Library/Application Support/UshiNext/Projects/{project_id}/recordings/` (создаются по факту первой записи в проект).
+   - Orphan-Записи (без Проекта): `~/Library/Application Support/UshiNext/Recordings/`.
+   - Всё managed строго в Application Support. Не используем `~/Documents/UshiNext/` (это legacy-путь из Phase 0, унаследованный от старого Ushi через `AppContainer.name`) — после Phase 1 он не нужен. Если за время Phase 0 туда что-то записалось — это будет учтено в Phase 6 при миграции, сейчас не трогать.
+   - `AppSettings.legacyDefaultRecordingsDirectory()` (или аналог) — либо удалить, либо переориентировать на новый путь в Application Support. Решай по месту.
+8. **Миграция текущих записей.** Если в `~/Library/Application Support/UshiNext/` есть данные из старого Ushi (могут не быть — это новая папка) — не трогай. Перенос из старого Ushi — отдельная задача Phase 6.
+9. **Юнит-тесты.** Для `ProjectStore` минимум:
    - create → читается обратно
    - rename → обновляется
    - delete с `deleteRecordings: false` → записи остаются с `projectId = nil`
