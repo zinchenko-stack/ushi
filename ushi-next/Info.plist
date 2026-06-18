@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>NSMicrophoneInjectionUsageDescription</key>
+	<string>ushi записывает системный звук для транскрипции уроков
+Ushi записывает системный звук для транскрипции уроков
+</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>ushi записывает твой микрофон, чтобы в записи созвона был слышен и твой голос, а не только собеседника.</string>
+</dict>
+</plist>

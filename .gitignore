@@ -4,3 +4,5 @@ release/build/
 *.xcresult
 *.dSYM
 .DS_Store
+.build/
+ushi-next-tests/.build/
