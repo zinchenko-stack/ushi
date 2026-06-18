@@ -7,6 +7,7 @@ import Foundation
 import GRDB
 import Observation
 
+@MainActor
 @Observable
 final class RecordingsStore {
     @ObservationIgnored private let dbQueue: DatabaseQueue
@@ -399,16 +400,14 @@ final class RecordingsStore {
                 outputDirectory: outputDir
             )
             let transcriptBookmark = FileBookmark.create(from: txtURL)
-            await MainActor.run {
-                self.update(id: id) {
-                    $0.transcriptFileName = txtURL.lastPathComponent
-                    $0.transcriptBookmark = transcriptBookmark
-                    $0.status = .done
-                }
+            self.update(id: id) {
+                $0.transcriptFileName = txtURL.lastPathComponent
+                $0.transcriptBookmark = transcriptBookmark
+                $0.status = .done
             }
         } catch {
             print("❌ transcription failed: \(error.localizedDescription)")
-            await MainActor.run { self.update(id: id) { $0.status = .failed } }
+            self.update(id: id) { $0.status = .failed }
         }
     }
 
