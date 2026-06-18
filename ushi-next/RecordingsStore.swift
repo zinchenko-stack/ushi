@@ -53,98 +53,19 @@ final class RecordingsStore {
         // Транскрибация в процессе — пропускаем, иначе сломаем whisper.
         if rec.status == .transcribing || rec.status == .pending { return }
 
-        let base = Self.sanitizeFilename(rec.title)
-        guard !base.isEmpty else { return }
-
-        let fm = FileManager.default
         let mediaDir = mediaDirectory(for: rec)
-        let txtDir = rec.transcriptDirectoryURL()
-        let audioExt = (rec.audioFileName as NSString).pathExtension
-        let resolved = uniqueBaseName(
-            base: base,
-            mediaDir: mediaDir,
-            txtDir: txtDir,
-            audioExt: audioExt,
-            currentAudio: rec.audioFileName,
-            currentTranscript: rec.transcriptFileName
+        let result = fileCoordinator.renameFilesOnDisk(
+            recording: rec,
+            newTitle: rec.title,
+            mediaDir: mediaDir
         )
 
-        // Аудио / видео — переименовываем только если файл ещё на диске и не помечен как удалённый.
-        if !rec.audioFileName.isEmpty, !rec.audioRemoved, !audioExt.isEmpty {
-            let from = mediaDir.appendingPathComponent(rec.audioFileName)
-            let to = mediaDir.appendingPathComponent("\(resolved).\(audioExt)")
-            if from != to, fm.fileExists(atPath: from.path) {
-                do {
-                    try fm.moveItem(at: from, to: to)
-                    rec.audioFileName = to.lastPathComponent
-                    // Обновляем bookmark под новое имя (хотя bookmark пережил бы и через
-                    // inode — но явное обновление безопаснее, особенно если файл
-                    // менял volume в процессе).
-                    rec.audioBookmark = FileBookmark.create(from: to)
-                } catch {
-                    print("❌ rename audio failed: \(error.localizedDescription)")
-                }
-            }
-        }
-
-        // Транскрипт (служебная папка, не пользовательская).
-        if let txt = rec.transcriptFileName, !txt.isEmpty, let txtDir {
-            let from = txtDir.appendingPathComponent(txt)
-            let to = txtDir.appendingPathComponent("\(resolved).txt")
-            if from != to, fm.fileExists(atPath: from.path) {
-                do {
-                    try fm.moveItem(at: from, to: to)
-                    rec.transcriptFileName = to.lastPathComponent
-                    rec.transcriptBookmark = FileBookmark.create(from: to)
-                } catch {
-                    print("❌ rename transcript failed: \(error.localizedDescription)")
-                }
-            }
-        }
+        rec.audioFileName = result.audioFileName
+        rec.audioBookmark = result.audioBookmark
+        rec.transcriptFileName = result.transcriptFileName
+        rec.transcriptBookmark = result.transcriptBookmark
 
         recordings[idx] = rec
-    }
-
-    /// Подбирает базовое имя, не конфликтующее с другими файлами ни в media-, ни в transcripts-папке.
-    /// Текущие файлы самой записи считаются «своими» — на них не реагируем.
-    private func uniqueBaseName(
-        base: String,
-        mediaDir: URL,
-        txtDir: URL?,
-        audioExt: String,
-        currentAudio: String,
-        currentTranscript: String?
-    ) -> String {
-        let fm = FileManager.default
-        var candidate = base
-        var n = 2
-        while true {
-            let audioName = audioExt.isEmpty ? "" : "\(candidate).\(audioExt)"
-            let txtName = "\(candidate).txt"
-            let audioPath = audioName.isEmpty ? nil : mediaDir.appendingPathComponent(audioName).path
-            let txtPath = txtDir?.appendingPathComponent(txtName).path
-
-            let audioOK = audioPath.map { !fm.fileExists(atPath: $0) || audioName == currentAudio } ?? true
-            let txtOK = txtPath.map { !fm.fileExists(atPath: $0) || txtName == currentTranscript } ?? true
-
-            if audioOK && txtOK { return candidate }
-            candidate = "\(base) (\(n))"
-            n += 1
-            if n > 999 { return candidate }   // на всякий случай
-        }
-    }
-
-    /// Чистит имя от символов, опасных для файловой системы. Кириллицу, пробелы,
-    /// числа — оставляем как есть, macOS APFS это всё нормально хранит.
-    private static func sanitizeFilename(_ raw: String) -> String {
-        let invalid: Set<Character> = ["/", "\\", ":", "\0"]
-        var s = String(raw.map { invalid.contains($0) ? "-" : $0 })
-        while s.hasPrefix(".") { s.removeFirst() }
-        s = s.trimmingCharacters(in: .whitespaces)
-        if s.count > 100 {
-            s = String(s.prefix(100)).trimmingCharacters(in: .whitespaces)
-        }
-        return s
     }
 
     @discardableResult
