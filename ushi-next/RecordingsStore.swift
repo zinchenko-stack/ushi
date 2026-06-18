@@ -11,6 +11,7 @@ import Observation
 @Observable
 final class RecordingsStore {
     @ObservationIgnored private let dbQueue: DatabaseQueue
+    @ObservationIgnored private let fileCoordinator = RecordingFileCoordinator()
     var recordings: [Recording] = [] {
         didSet { scheduleSave() }
     }
@@ -31,7 +32,7 @@ final class RecordingsStore {
     // MARK: - Mutations
 
     func delete(_ recording: Recording) {
-        deleteFiles(for: recording)
+        fileCoordinator.deleteFiles(for: recording)
         recordings.removeAll { $0.id == recording.id }
     }
 
@@ -472,17 +473,6 @@ final class RecordingsStore {
             }
         } catch {
             print("❌ store save failed: \(error.localizedDescription)")
-        }
-    }
-
-    private func deleteFiles(for recording: Recording) {
-        let fm = FileManager.default
-        // Идём через резолвер — он находит файл даже если был переименован/перемещён.
-        if let (audioURL, _) = recording.resolveAudioURL() {
-            try? fm.removeItem(at: audioURL)
-        }
-        if let (txtURL, _) = recording.resolveTranscriptURL() {
-            try? fm.removeItem(at: txtURL)
         }
     }
 
