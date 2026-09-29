@@ -27,7 +27,7 @@ enum AppState {
             arguments: [Key.lastUsedPreset]
         )
         guard let raw, let preset = RecordingPreset(rawValue: raw) else {
-            return .micOnly
+            return .default
         }
         return preset
     }
@@ -43,7 +43,7 @@ enum AppState {
     // MARK: - Удобные обёртки на shared DB
 
     static func lastUsedPreset() -> RecordingPreset {
-        ((try? AppDatabase.shared.read { try lastUsedPreset(in: $0) }) ?? .micOnly).resolvedForThisMac
+        ((try? AppDatabase.shared.read { try lastUsedPreset(in: $0) }) ?? .default).resolvedForThisMac
     }
 
     static func setLastUsedPreset(_ preset: RecordingPreset) {

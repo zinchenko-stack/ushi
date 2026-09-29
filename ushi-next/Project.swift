@@ -25,7 +25,7 @@ struct Project: Identifiable, Hashable {
         icon: String? = nil,
         colorHex: String? = nil,
         storage: ProjectStorage = .managed,
-        lastUsedPreset: RecordingPreset = .micOnly,
+        lastUsedPreset: RecordingPreset = .default,
         isPinned: Bool = false,
         createdAt: Date = Date(),
         updatedAt: Date = Date()
@@ -79,7 +79,7 @@ extension Project: FetchableRecord, MutablePersistableRecord {
             displayPath: displayPath
         )
         let presetRaw: String = row[Columns.lastUsedPreset]
-        self.lastUsedPreset = (RecordingPreset(rawValue: presetRaw) ?? .micOnly).resolvedForThisMac
+        self.lastUsedPreset = (RecordingPreset(rawValue: presetRaw) ?? .default).resolvedForThisMac
         self.isPinned = row[Columns.isPinned]
         self.createdAt = row[Columns.createdAt]
         self.updatedAt = row[Columns.updatedAt]

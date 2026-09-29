@@ -79,7 +79,7 @@ struct Recording: Identifiable, Codable, Hashable {
         audioBookmark: Data? = nil,
         transcriptBookmark: Data? = nil,
         projectId: UUID? = nil,
-        presetSnapshot: RecordingPreset = .micOnly,
+        presetSnapshot: RecordingPreset = .default,
         hasMicrophone: Bool = true,
         hasSystemAudio: Bool = false,
         hasScreen: Bool = false,
@@ -159,7 +159,7 @@ struct Recording: Identifiable, Codable, Hashable {
 
         // Phase 1 поля — у старого JSON их нет, фолбечим в безопасные дефолты.
         projectId = try c.decodeIfPresent(UUID.self, forKey: .projectId)
-        presetSnapshot = (try c.decodeIfPresent(RecordingPreset.self, forKey: .presetSnapshot)) ?? .micOnly
+        presetSnapshot = (try c.decodeIfPresent(RecordingPreset.self, forKey: .presetSnapshot)) ?? .default
         hasMicrophone = try c.decodeIfPresent(Bool.self, forKey: .hasMicrophone) ?? true
         hasSystemAudio = try c.decodeIfPresent(Bool.self, forKey: .hasSystemAudio) ?? false
         hasScreen = try c.decodeIfPresent(Bool.self, forKey: .hasScreen) ?? false
@@ -280,7 +280,7 @@ extension Recording: FetchableRecord, MutablePersistableRecord {
         self.createdAt = row[Columns.createdAt]
         self.fileSize = row[Columns.fileSize]
         let presetRaw: String = row[Columns.presetSnapshot]
-        self.presetSnapshot = RecordingPreset(rawValue: presetRaw) ?? .micOnly
+        self.presetSnapshot = RecordingPreset(rawValue: presetRaw) ?? .default
         self.hasMicrophone = row[Columns.hasMicrophone]
         self.hasSystemAudio = row[Columns.hasSystemAudio]
         self.hasScreen = row[Columns.hasScreen]

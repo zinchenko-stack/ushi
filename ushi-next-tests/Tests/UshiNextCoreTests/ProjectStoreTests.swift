@@ -146,9 +146,9 @@ final class ProjectStoreTests: XCTestCase {
         XCTAssertEqual(read, .systemAndMic)
     }
 
-    func testAppStateLastUsedPresetDefaultsToMicOnly() throws {
+    func testAppStateLastUsedPresetDefaultsToSystemAndMic() throws {
         let read = try dbQueue.read { try AppState.lastUsedPreset(in: $0) }
-        XCTAssertEqual(read, .micOnly)
+        XCTAssertEqual(read, .systemAndMic)
     }
 
     // MARK: - Helpers

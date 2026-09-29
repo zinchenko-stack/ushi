@@ -30,6 +30,9 @@ struct RecordingPreset: Hashable, Codable, RawRepresentable {
     static let systemAndMic = RecordingPreset(systemAudio: true, microphone: true, screen: false)
     static let screen = RecordingPreset(systemAudio: true, microphone: true, screen: true)
 
+    /// По умолчанию — как в текущем Ushi: собеседник в созвоне + твой голос.
+    static let `default` = systemAndMic
+
     // MARK: - Хранение
 
     var rawValue: String {
