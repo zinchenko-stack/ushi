@@ -5,8 +5,15 @@
 
 import SwiftUI
 
+/// Глобальный поиск (Phase 4, §7.5): по названию, тексту расшифровки и имени
+/// Проекта. У каждой записи — badge Проекта. Открытие результата раскрывает
+/// её в sidebar и показывает детали.
 struct HistoryView: View {
     @Bindable var store: RecordingsStore
+    let projects: ProjectsModel
+    /// Открыть запись: выделить в sidebar и показать детали.
+    var onOpen: (Recording) -> Void
+
     @State private var selection: Recording.ID?
     @State private var searchText = ""
     @State private var filter: HistoryFilter = .all
@@ -20,7 +27,8 @@ struct HistoryView: View {
         return store.recordings.compactMap { rec in
             guard matchesFilter(rec) else { return nil }
             if !isSearching { return (rec, nil) }
-            guard let match = index.match(query: query, for: rec) else { return nil }
+            let projectName = projects.project(id: rec.projectId)?.name
+            guard let match = index.match(query: query, for: rec, projectName: projectName) else { return nil }
             return (rec, match)
         }
     }
@@ -89,22 +97,28 @@ struct HistoryView: View {
                             ForEach(groupedRecordings) { section in
                                 Section(section.kind.title) {
                                     ForEach(section.recordings) { rec in
-                                        NavigationLink(value: rec) {
-                                            RecordingRow(recording: rec, match: matchById[rec.id])
-                                        }
+                                        RecordingRow(
+                                            recording: rec,
+                                            match: matchById[rec.id],
+                                            projectName: projects.project(id: rec.projectId)?.name
+                                        )
                                     }
                                 }
                             }
                         }
                         .listStyle(.plain)
+                        .onChange(of: selection) { _, id in
+                            guard let id, let rec = store.recordings.first(where: { $0.id == id }) else { return }
+                            onOpen(rec)
+                        }
                     }
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 8)
             }
         }
-        .navigationTitle("Записи")
-        .searchable(text: $searchText, placement: .toolbar, prompt: "Поиск по названию и тексту")
+        .navigationTitle("Поиск")
+        .searchable(text: $searchText, placement: .toolbar, prompt: "Название, текст или проект")
         .task(id: store.recordings.map { "\($0.id)|\($0.transcriptFileName ?? "")|\($0.status.rawValue)" }) {
             // Срабатывает при добавлении/удалении записи и при появлении/смене транскрипта.
             // Тяжёлое IO внутри индекса делается в фоне.
@@ -179,6 +193,8 @@ private struct HistorySection: Identifiable {
 private struct RecordingRow: View {
     let recording: Recording
     let match: SearchMatch?
+    /// nil — запись без Проекта («Записи»).
+    let projectName: String?
 
     var body: some View {
         HStack(spacing: 12) {
@@ -203,6 +219,7 @@ private struct RecordingRow: View {
                 subtitleView
             }
             Spacer()
+            ProjectBadge(name: projectName)
         }
         .padding(.vertical, 4)
     }
@@ -363,5 +380,21 @@ private struct RecordingRow: View {
         if h > 0 { return "\(h) ч \(m) мин" }
         if m > 0 { return "\(m) мин \(s) с" }
         return "\(s) с"
+    }
+}
+
+/// Метка Проекта у результата поиска (§7.5): «📁 Психолог» или «Без проекта».
+private struct ProjectBadge: View {
+    let name: String?
+
+    var body: some View {
+        Label(name ?? "Без проекта", systemImage: name == nil ? "tray" : "folder")
+            .font(.caption)
+            .lineLimit(1)
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(Capsule().fill(.quaternary))
+            .frame(maxWidth: 160, alignment: .trailing)
     }
 }

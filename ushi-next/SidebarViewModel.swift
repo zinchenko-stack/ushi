@@ -107,6 +107,22 @@ final class SidebarViewModel {
         }
     }
 
+    /// Сделать запись видимой в sidebar (§7.5: открытие результата поиска):
+    /// раскрыть её Проект или «Записи» и, если она не в последних пяти, —
+    /// «Показать больше».
+    func reveal(_ recording: Recording) {
+        let project = projectsModel.project(id: recording.projectId)
+        if let project {
+            setExpanded(project, true)
+        } else {
+            isInboxExpanded = true
+        }
+        let recent = store.recordings(inProject: recording.projectId).prefix(Self.recentLimit)
+        if !recent.contains(where: { $0.id == recording.id }) {
+            expandedAll.insert(project?.id)
+        }
+    }
+
     // MARK: - Действия с Проектами
 
     func togglePinned(_ project: Project) {

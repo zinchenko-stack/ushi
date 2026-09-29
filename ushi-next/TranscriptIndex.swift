@@ -91,11 +91,14 @@ final class TranscriptIndex {
     /// Пробует сопоставить запрос с записью. Возвращает SearchMatch при попадании, иначе nil.
     /// Логика: запрос разбивается на токены по whitespace; запись подходит, если
     /// КАЖДЫЙ токен встречается в title или транскрипте.
-    func match(query: String, for recording: Recording) -> SearchMatch? {
+    /// `projectName` — имя Проекта записи (Phase 4, §7.5): токен может совпасть
+    /// с названием, транскриптом или Проектом.
+    func match(query: String, for recording: Recording, projectName: String? = nil) -> SearchMatch? {
         let tokens = Self.tokenize(query)
         guard !tokens.isEmpty else { return nil }
 
         let title = recording.title
+        let project = projectName ?? ""
         let transcript = entries[recording.id]?.text ?? ""
         let options: String.CompareOptions = [.caseInsensitive, .diacriticInsensitive]
 
@@ -103,6 +106,7 @@ final class TranscriptIndex {
 
         for token in tokens {
             let titleHit = title.range(of: token, options: options) != nil
+                || project.range(of: token, options: options) != nil
             let transcriptHit = transcript.range(of: token, options: options)
 
             if !titleHit && transcriptHit == nil {

@@ -234,7 +234,7 @@ final class RecordingsStore {
         }()
 
         let rec = Recording(
-            title: "Запись от " + Self.shortDateString(Date()),
+            title: Self.fallbackTitle(project: project),
             duration: duration,
             audioFileName: audioURL.lastPathComponent,
             storageFolderPath: audioURL.deletingLastPathComponent().path,
@@ -482,10 +482,32 @@ final class RecordingsStore {
                 $0.transcriptBookmark = transcriptBookmark
                 $0.status = .done
             }
+            applyAutoTitle(id: id, transcriptURL: txtURL)
         } catch {
             print("❌ transcription failed: \(error.localizedDescription)")
             self.update(id: id) { $0.status = .failed }
         }
+    }
+
+    /// Авто-название из транскрипта (Phase 4, §7.3). Не трогает названия,
+    /// которые юзер задал руками. Файлы переименовываются под новое название,
+    /// как при ручном переименовании.
+    private func applyAutoTitle(id: UUID, transcriptURL: URL) {
+        guard let idx = recordings.firstIndex(where: { $0.id == id }),
+              recordings[idx].titleSource != .manual,
+              let text = try? String(contentsOf: transcriptURL, encoding: .utf8),
+              let title = AutoTitle.make(fromTranscript: text) else { return }
+        recordings[idx].title = title
+        recordings[idx].titleSource = .auto
+        renameFilesOnDisk(at: idx)
+    }
+
+    /// Fallback-имя до авто-названия (§7.3): «Психолог · 29 сент., 19:40».
+    static func fallbackTitle(project: Project?, date: Date = Date()) -> String {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "ru_RU")
+        f.dateFormat = "d MMM, HH:mm"
+        return "\(project?.name ?? "Запись") · \(f.string(from: date))"
     }
 
     private func update(id: UUID, _ mutate: (inout Recording) -> Void) {
@@ -599,14 +621,6 @@ final class RecordingsStore {
         }
     }
 
-    // MARK: - Helpers
-
-    static func shortDateString(_ date: Date) -> String {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "ru_RU")
-        f.dateFormat = "dd.MM.yyyy, HH:mm"
-        return f.string(from: date)
-    }
 }
 
 enum RecordingsStoreError: LocalizedError {

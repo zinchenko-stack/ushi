@@ -105,7 +105,10 @@ struct ContentView: View {
                 selection = .recording(rec.id)
             }
         case .search:
-            HistoryView(store: recordingController.store)
+            HistoryView(store: recordingController.store, projects: recordingController.projects) { rec in
+                sidebarModel.reveal(rec)
+                selection = .recording(rec.id)
+            }
         case .settings:
             SettingsView()
         case .recording(let id):
