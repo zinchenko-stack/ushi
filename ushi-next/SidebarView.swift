@@ -17,6 +17,11 @@ struct SidebarView: View {
 
     var body: some View {
         List(selection: $selection) {
+            // Обычный пункт меню, а не отдельная кнопка: ведёт на hero-экран,
+            // где стартует запись. Во время записи показывает таймер.
+            NewRecordingRow(controller: controller)
+                .tag(MainSelection.home)
+
             // Phase 4 заменит на глобальный поиск; пока ведёт в список всех записей
             // с поиском по названию и тексту, чтобы не потерять старую функцию.
             Label("Поиск", systemImage: "magnifyingglass")
@@ -55,11 +60,6 @@ struct SidebarView: View {
         }
         .listStyle(.sidebar)
         .navigationTitle("Ushi")
-        .safeAreaInset(edge: .top, spacing: 0) {
-            StartRecordingHeader(controller: controller) {
-                selection = .home
-            }
-        }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             // Настройки прижаты к низу, селекшн делит общий $selection с верхним списком.
             List(selection: $selection) {
@@ -212,75 +212,39 @@ struct SidebarView: View {
     }
 }
 
-// MARK: - Кнопка «Начать запись» + chip пресета (§6.4)
+// MARK: - Пункт «Новая запись» (§6.4)
 
-private struct StartRecordingHeader: View {
-    @Bindable var controller: RecordingController
-    /// Показать hero/экран записи — чтобы был виден отсчёт и уровень.
-    var onShowRecording: () -> Void
+/// Строка sidebar, ведущая на hero-экран. Во время отсчёта и записи —
+/// красная точка, таймер и Проект, куда идёт запись.
+private struct NewRecordingRow: View {
+    let controller: RecordingController
 
     var body: some View {
-        Button(action: tap) {
-            HStack(spacing: 8) {
-                Image(systemName: glyph)
+        HStack(spacing: 6) {
+            Label {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(title)
-                        .fontWeight(.semibold)
-                        .monospacedDigit()
-                    // Что и куда будет записано — подсказка, менять на hero или в menu bar.
-                    Text(subtitle)
-                        .font(.caption)
-                        .opacity(0.8)
-                        .lineLimit(1)
+                    Text(controller.isRecording ? "Идёт запись" : "Новая запись")
+                    if controller.isRecording || controller.isCountingDown {
+                        Text(controller.activeProject?.name ?? "Записи")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
                 }
-                Spacer(minLength: 0)
+            } icon: {
+                Image(systemName: controller.isRecording ? "record.circle.fill" : "record.circle")
+                    .foregroundStyle(controller.isRecording ? Color.red : Color.primary)
             }
-            .foregroundStyle(.white)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 7)
-            .background(RoundedRectangle(cornerRadius: 8).fill(fill))
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .disabled(controller.isBusy)
-        .opacity(controller.isBusy ? 0.6 : 1)
-        .padding(.horizontal, 12)
-        .padding(.top, 8)
-        .padding(.bottom, 4)
-    }
-
-    private var title: String {
-        if let cd = controller.countdown { return "Отмена · \(cd)" }
-        if controller.isRecording { return "Остановить · \(formatTime(controller.recorder.elapsed))" }
-        return "Начать запись"
-    }
-
-    private var subtitle: String {
-        let active = controller.isRecording || controller.isCountingDown
-        let preset = (active ? controller.activePreset : nil) ?? controller.globalPreset
-        let target = active ? (controller.activeProject?.name ?? "Записи") : nil
-        return [preset.shortTitle, target].compactMap { $0 }.joined(separator: " → ")
-    }
-
-    private var glyph: String {
-        if controller.isCountingDown { return "xmark" }
-        return controller.isRecording ? "stop.fill" : "record.circle"
-    }
-
-    private var fill: Color {
-        if controller.isRecording { return .red }
-        if controller.isCountingDown { return .secondary }
-        return .accentColor
-    }
-
-    private func tap() {
-        if controller.isCountingDown {
-            controller.cancelCountdown()
-        } else if controller.isRecording {
-            Task { await controller.stop(alertOnFailure: false) }
-        } else {
-            onShowRecording()
-            Task { await controller.startInInbox() }
+            Spacer(minLength: 4)
+            if let cd = controller.countdown {
+                Text("\(cd)")
+                    .font(.callout.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            } else if controller.isRecording {
+                Text(formatTime(controller.recorder.elapsed))
+                    .font(.callout.monospacedDigit())
+                    .foregroundStyle(.red)
+            }
         }
     }
 }
