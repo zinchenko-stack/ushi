@@ -50,11 +50,13 @@ struct SettingsView: View {
     @State private var videoDays = AppSettings.videoRetentionDays()
     @State private var folderError: String?
     @State private var pendingConfirmation: PendingConfirmation?
+    @State private var smartTitleManager = SmartTitleModelManager.shared
 
     var body: some View {
         Form {
             recordingSection
             qualitySection
+            smartTitleSection
             cleanupSection
             legacySection
         }
@@ -129,6 +131,77 @@ struct SettingsView: View {
             LabeledContent("Расход места") {
                 Text(videoQuality.summary)
                     .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    // MARK: - Умные названия (Phase 4b)
+
+    private var smartTitleSection: some View {
+        Section {
+            Toggle("Умные названия (бета)", isOn: Binding(
+                get: { smartTitleManager.enabled },
+                set: { smartTitleManager.setEnabled($0) }
+            ))
+            .toggleStyle(.switch)
+
+            if smartTitleManager.enabled {
+                switch smartTitleManager.state {
+                case .missing:
+                    LabeledContent("Модель") {
+                        Text("Ожидание загрузки (\(SmartTitleModelSpec.sizeDescription))")
+                            .foregroundStyle(.secondary)
+                    }
+                case .downloading(let received, let total):
+                    VStack(alignment: .leading, spacing: 6) {
+                        ProgressView(value: Double(received), total: Double(total))
+                        HStack {
+                            Text("\(ByteCountFormatter.string(fromByteCount: received, countStyle: .file)) из \(ByteCountFormatter.string(fromByteCount: total, countStyle: .file))")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            Button("Приостановить") {
+                                smartTitleManager.pauseDownload()
+                            }
+                            .buttonStyle(.link)
+                            .font(.footnote)
+                        }
+                    }
+                case .paused:
+                    LabeledContent("Загрузка приостановлена") {
+                        Button("Продолжить") {
+                            smartTitleManager.startDownload()
+                        }
+                    }
+                case .checking:
+                    HStack(spacing: 8) {
+                        ProgressView().controlSize(.small)
+                        Text("Проверка модели...")
+                            .foregroundStyle(.secondary)
+                    }
+                case .ready:
+                    LabeledContent("Статус") {
+                        Label("Модель готова", systemImage: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                    }
+                case .failed(let message):
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(message)
+                            .font(.footnote)
+                            .foregroundStyle(.red)
+                        Button("Повторить загрузку") {
+                            smartTitleManager.startDownload()
+                        }
+                    }
+                }
+            }
+        } header: {
+            Text("Умные названия (бета)")
+        } footer: {
+            if !smartTitleManager.enabled {
+                Text("Генерирует краткую суть разговора (3–7 слов) с помощью локальной нейросети Gemma 3 1B. Размер модели: \(SmartTitleModelSpec.sizeDescription).")
+            } else {
+                Text("Формулирует суть разговора (3–7 слов) с помощью локальной нейросети. Работает полностью на устройстве без отправки данных в сеть. Для коротких записей (до 40 слов) используется первая фраза.")
             }
         }
     }

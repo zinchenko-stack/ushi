@@ -17,10 +17,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        let waitsForResumeData = ModelManager.shared.prepareForTermination {
-            sender.reply(toApplicationShouldTerminate: true)
+        var pending = 0
+        let replyIfNeeded = {
+            pending -= 1
+            if pending <= 0 {
+                sender.reply(toApplicationShouldTerminate: true)
+            }
         }
-        return waitsForResumeData ? .terminateLater : .terminateNow
+
+        if ModelManager.shared.prepareForTermination(completion: replyIfNeeded) {
+            pending += 1
+        }
+        if SmartTitleModelManager.shared.prepareForTermination(completion: replyIfNeeded) {
+            pending += 1
+        }
+
+        return pending > 0 ? .terminateLater : .terminateNow
     }
 }
 
@@ -55,6 +67,7 @@ struct ushiApp: App {
             }
             .task {
                 modelManager.checkInstalled()
+                SmartTitleModelManager.shared.restore()
             }
         }
         .windowResizability(.contentMinSize)

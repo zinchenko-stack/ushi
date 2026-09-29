@@ -577,24 +577,37 @@ final class RecordingsStore {
                 $0.transcriptBookmark = transcriptBookmark
                 $0.status = .done
             }
-            applyAutoTitle(id: id, transcriptURL: txtURL)
+            await applyAutoTitle(id: id, transcriptURL: txtURL)
         } catch {
             print("❌ transcription failed: \(error.localizedDescription)")
             self.update(id: id) { $0.status = .failed }
         }
     }
 
-    /// Авто-название из транскрипта (Phase 4, §7.3). Не трогает названия,
-    /// которые юзер задал руками. Файлы переименовываются под новое название,
-    /// как при ручном переименовании.
-    private func applyAutoTitle(id: UUID, transcriptURL: URL) {
+    /// Авто-название из транскрипта (Phase 4, §7.3; Phase 4b: Summarizer). Не трогает названия,
+    /// которые юзер задал руками. Если включены «Умные названия» и модель готова — используем
+    /// локальную LLM (Gemma 3), иначе/при ошибке — fallback на AutoTitle.make (первая фраза).
+    /// Файлы переименовываются под новое название, как при ручном переименовании.
+    private func applyAutoTitle(id: UUID, transcriptURL: URL) async {
         guard let idx = recordings.firstIndex(where: { $0.id == id }),
               recordings[idx].titleSource != .manual,
-              let text = try? String(contentsOf: transcriptURL, encoding: .utf8),
-              let title = AutoTitle.make(fromTranscript: text) else { return }
-        recordings[idx].title = title
-        recordings[idx].titleSource = .auto
-        renameFilesOnDisk(at: idx)
+              let text = try? String(contentsOf: transcriptURL, encoding: .utf8) else { return }
+
+        var finalTitle: String? = nil
+        if SmartTitleModelManager.shared.isReady {
+            finalTitle = await Summarizer.shared.title(for: text)
+        }
+        if finalTitle == nil {
+            finalTitle = AutoTitle.make(fromTranscript: text)
+        }
+
+        guard let title = finalTitle,
+              let currentIdx = recordings.firstIndex(where: { $0.id == id }),
+              recordings[currentIdx].titleSource != .manual else { return }
+
+        recordings[currentIdx].title = title
+        recordings[currentIdx].titleSource = .auto
+        renameFilesOnDisk(at: currentIdx)
     }
 
     /// Fallback-имя до авто-названия (§7.3): «Психолог · 29 сент., 19:40».

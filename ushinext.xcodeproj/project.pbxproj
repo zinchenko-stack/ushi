@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		5B0000012FE0000000000001 /* vendor/whisper.cpp/build/bin/whisper-cli in Embed Whisper CLI */ = {isa = PBXBuildFile; fileRef = 5B0000022FE0000000000001 /* vendor/whisper.cpp/build/bin/whisper-cli */; };
+		5B0000042FE0000000000001 /* vendor/llama.cpp/build/bin/llama-completion in Embed Whisper CLI */ = {isa = PBXBuildFile; fileRef = 5B0000052FE0000000000001 /* vendor/llama.cpp/build/bin/llama-completion */; };
 		5BB1B3000000000000000001 /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = 5BB1B2000000000000000001 /* GRDB */; };
 /* End PBXBuildFile section */
 
@@ -19,6 +20,7 @@
 			dstSubfolderSpec = 7;
 			files = (
 				5B0000012FE0000000000001 /* vendor/whisper.cpp/build/bin/whisper-cli in Embed Whisper CLI */,
+				5B0000042FE0000000000001 /* vendor/llama.cpp/build/bin/llama-completion in Embed Whisper CLI */,
 			);
 			name = "Embed Whisper CLI";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -28,6 +30,7 @@
 /* Begin PBXFileReference section */
 		5AA1864D2FDC1EC3003CEF9F /* UshiNext.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = UshiNext.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		5B0000022FE0000000000001 /* vendor/whisper.cpp/build/bin/whisper-cli */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; path = "vendor/whisper.cpp/build/bin/whisper-cli"; sourceTree = SOURCE_ROOT; };
+		5B0000052FE0000000000001 /* vendor/llama.cpp/build/bin/llama-completion */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; path = "vendor/llama.cpp/build/bin/llama-completion"; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -68,6 +71,7 @@
 			children = (
 				5AA1864F2FDC1EC3003CEF9F /* ushi-next */,
 				5B0000022FE0000000000001 /* vendor/whisper.cpp/build/bin/whisper-cli */,
+				5B0000052FE0000000000001 /* vendor/llama.cpp/build/bin/llama-completion */,
 				5AA1864E2FDC1EC3003CEF9F /* Products */,
 			);
 			sourceTree = "<group>";
