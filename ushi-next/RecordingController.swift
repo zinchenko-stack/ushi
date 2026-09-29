@@ -194,31 +194,12 @@ final class RecordingController {
         }
     }
 
+    /// Доступ к записи экрана нужен для любой записи (часы и системный звук идут
+    /// через ScreenCaptureKit). Настройки сами не открываем — системный запрос
+    /// macOS уже содержит кнопку «Открыть Системные настройки».
     private func ensureScreenRecordingAccess() throws {
-        guard !recorder.captureVideo || ScreenRecordingPermission.isGranted else {
-            try requestScreenRecordingAccess()
-            return
-        }
-
-        if !ScreenRecordingPermission.isGranted {
-            try requestScreenRecordingAccess()
-        }
-    }
-
-    private func requestScreenRecordingAccess() throws {
-        let hadAccess = ScreenRecordingPermission.isGranted
-        let granted = ScreenRecordingPermission.request()
-
-        guard hadAccess else {
-            ScreenRecordingPermission.openSettings()
-            if granted {
-                throw RecordingControllerError.screenPermissionRequiresRelaunch
-            }
-            throw RecordingControllerError.screenPermissionDenied
-        }
-
-        guard granted else {
-            ScreenRecordingPermission.openSettings()
+        guard !ScreenRecordingPermission.isGranted else { return }
+        guard ScreenRecordingPermission.request() else {
             throw RecordingControllerError.screenPermissionDenied
         }
     }
@@ -259,16 +240,13 @@ final class RecordingController {
 private enum RecordingControllerError: LocalizedError {
     case microphonePermissionDenied
     case screenPermissionDenied
-    case screenPermissionRequiresRelaunch
 
     var errorDescription: String? {
         switch self {
         case .microphonePermissionDenied:
             return "Нет доступа к микрофону. Разреши его в Системных настройках → Конфиденциальность и безопасность → Микрофон."
         case .screenPermissionDenied:
-            return "Нет доступа к записи экрана. Ushi использует его для системного звука и записи экрана. Разреши доступ в Системных настройках → Конфиденциальность и безопасность → Запись экрана."
-        case .screenPermissionRequiresRelaunch:
-            return "Доступ к записи экрана был выдан только что. Перезапусти Ushi, чтобы системный звук и запись экрана начали работать."
+            return "Нет доступа к записи экрана — без него Ushi не может записывать. Разреши его в Системных настройках → Конфиденциальность и безопасность → Запись экрана и нажми запись ещё раз."
         }
     }
 }

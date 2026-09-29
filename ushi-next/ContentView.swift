@@ -10,7 +10,6 @@ struct ContentView: View {
     let recordingController: RecordingController
     @State private var sidebarModel: SidebarViewModel
     @State private var selection: MainSelection? = .home
-    @State private var hasScreenAccess = ScreenRecordingPermission.isGranted
     @State private var path: [Recording] = []
     @Environment(UpdateChecker.self) private var updateChecker
     @Environment(ModelManager.self) private var modelManager
@@ -26,13 +25,9 @@ struct ContentView: View {
             DownloadBanner()
                 .transition(.move(edge: .top).combined(with: .opacity))
 
-            Group {
-                if hasScreenAccess {
-                    mainView
-                } else {
-                    PermissionGateView()
-                }
-            }
+            // Экрана-блокировки «нужен доступ» больше нет: окно открывается всегда,
+            // а доступ к записи экрана macOS спрашивает сама при первой записи.
+            mainView
         }
         .animation(.easeInOut(duration: 0.25), value: modelManager.isReady)
         .alert(
@@ -48,11 +43,6 @@ struct ContentView: View {
             }
         } message: { manifest in
             Text(updateAlertMessage(for: manifest))
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
-            if !hasScreenAccess {
-                hasScreenAccess = ScreenRecordingPermission.isGranted
-            }
         }
         .task {
             await updateChecker.check()
