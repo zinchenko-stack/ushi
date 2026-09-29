@@ -18,6 +18,9 @@ struct HeroStartView: View {
     @State private var targetProjectID: UUID?
     @State private var isCreatingProject = false
 
+    @State private var sourceHint: String?
+    @State private var hintTask: Task<Void, Never>?
+
     @State private var savedRecording: Recording?     // показанный тост (nil = скрыт)
     @State private var toastTask: Task<Void, Never>?
 
@@ -71,11 +74,18 @@ struct HeroStartView: View {
                     SourceToggleButton(
                         source: source,
                         isOn: presetBinding.wrappedValue.contains(source),
-                        isEnabled: !isActive && presetBinding.wrappedValue.canToggle(source)
+                        isEnabled: !isActive
                     ) {
-                        presetBinding.binding(for: source).wrappedValue.toggle()
+                        toggleSource(source)
                     }
                 }
+            }
+
+            if let sourceHint {
+                Text(sourceHint)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .transition(.opacity)
             }
 
             Text(statusText)
@@ -163,6 +173,30 @@ struct HeroStartView: View {
         .controlSize(.small)
         .fixedSize()
         .disabled(isActive)
+    }
+
+    // MARK: - Источники
+
+    /// Выключить последний звуковой источник нельзя — вместо молчаливой
+    /// блокировки показываем подсказку на пару секунд.
+    private func toggleSource(_ source: RecordingPreset.Source) {
+        let preset = presetBinding.wrappedValue
+        guard preset.canToggle(source) else {
+            showSourceHint("Нужен хотя бы системный звук или микрофон")
+            return
+        }
+        presetBinding.binding(for: source).wrappedValue.toggle()
+    }
+
+    private func showSourceHint(_ text: String) {
+        withAnimation { sourceHint = text }
+        hintTask?.cancel()
+        hintTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(2.5))
+            if !Task.isCancelled {
+                withAnimation { sourceHint = nil }
+            }
+        }
     }
 
     // MARK: - Кнопка
@@ -303,7 +337,7 @@ private struct SourceToggleButton: View {
         }
         .buttonStyle(.plain)
         .disabled(!isEnabled)
-        .opacity(isEnabled || isOn ? 1 : 0.5)
+        .opacity(isEnabled ? 1 : 0.6)
         .help(isOn ? "\(source.title): включено" : "\(source.title): выключено")
         .accessibilityLabel(source.title)
         .accessibilityValue(isOn ? "включено" : "выключено")
