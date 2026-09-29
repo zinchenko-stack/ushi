@@ -175,7 +175,7 @@ struct HeroStartView: View {
     private func toggleSource(_ source: RecordingPreset.Source) {
         let preset = presetBinding.wrappedValue
         guard preset.canToggle(source) else {
-            showSourceHint("Нужен хотя бы системный звук или микрофон")
+            showSourceHint("Выберите хотя бы один источник звука")
             return
         }
         presetBinding.binding(for: source).wrappedValue.toggle()
