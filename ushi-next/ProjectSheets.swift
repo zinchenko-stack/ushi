@@ -38,6 +38,13 @@ struct CreateProjectSheet: View {
                     .textFieldStyle(.roundedBorder)
                     .focused($nameFocused)
                     .onSubmit(create)
+                    .disabled(folder != nil)
+                if folder != nil {
+                    // У проекта в своей папке название = имя папки (синхронны в обе стороны).
+                    Text("Совпадает с именем папки. Переименуете проект — переименуется и папка.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             VStack(alignment: .leading, spacing: 6) {
@@ -116,8 +123,7 @@ struct CreateProjectSheet: View {
     private func pickFolder() {
         guard let picked = FolderPicker.chooseFolder(message: "Выберите папку, где будут лежать записи проекта") else { return }
         folder = picked
-        // Имя по умолчанию — имя папки, если юзер ещё ничего не ввёл (§6.5).
-        if trimmedName.isEmpty { name = picked.lastPathComponent }
+        name = picked.lastPathComponent
     }
 
     private func create() {

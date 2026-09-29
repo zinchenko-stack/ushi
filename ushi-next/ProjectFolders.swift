@@ -31,11 +31,14 @@ enum ProjectFolders {
     }
 
     /// Найти папку external-Проекта. nil — папки нет (degraded state, §7.6).
+    /// Папка в Корзине тоже считается пропавшей: bookmark находит её и там,
+    /// но писать записи в Корзину нельзя.
     static func resolveExternal(bookmark: Data, displayPath: String) -> Resolution? {
         guard let (url, fresh) = FileBookmark.resolve(bookmark) else { return nil }
         var isDirectory: ObjCBool = false
         guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory),
-              isDirectory.boolValue else { return nil }
+              isDirectory.boolValue,
+              !isInTrash(url) else { return nil }
 
         let moved = url.standardizedFileURL.path != displayPath
         guard moved || fresh != nil else { return Resolution(folder: url, updatedStorage: nil) }
@@ -76,6 +79,20 @@ enum ProjectFolders {
     static func externalStorage(for folder: URL) throws -> ProjectStorage {
         let bookmark = try folder.bookmarkData(options: [], includingResourceValuesForKeys: nil, relativeTo: nil)
         return .external(bookmark: bookmark, displayPath: folder.standardizedFileURL.path)
+    }
+
+    /// Лежит ли путь в Корзине — домашней (~/.Trash) или на внешнем диске (/.Trashes).
+    static func isInTrash(_ url: URL) -> Bool {
+        let components = url.standardizedFileURL.pathComponents
+        return components.contains(".Trash") || components.contains(".Trashes")
+    }
+
+    /// Имя папки из названия Проекта: без «/» и «:», которые Finder не пропустит.
+    static func folderName(from projectName: String) -> String {
+        let invalid: Set<Character> = ["/", ":", "\0"]
+        var s = String(projectName.map { invalid.contains($0) ? "-" : $0 })
+        while s.hasPrefix(".") { s.removeFirst() }
+        return s.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     /// Путь для показа в UI: «~/Documents/Психолог».

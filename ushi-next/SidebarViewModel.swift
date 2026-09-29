@@ -124,7 +124,12 @@ final class SidebarViewModel {
 
     func commitRename(_ project: Project, to name: String) {
         renamingProjectID = nil
-        projectsModel.rename(project, to: name)
+        do {
+            try projectsModel.rename(project, to: name)
+        } catch {
+            projectsModel.refreshFolders()
+            alertMessage = error.localizedDescription
+        }
     }
 
     func startCreatingProject(thenMove recording: Recording? = nil) {
