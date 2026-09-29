@@ -69,6 +69,8 @@ struct SidebarView: View {
             .listStyle(.sidebar)
             .scrollDisabled(true)
             .frame(height: 44)
+            .background(Color(nsColor: .windowBackgroundColor))
+            .overlay(alignment: .top) { Divider() }
         }
         .sheet(isPresented: $model.isCreatingProject) {
             CreateProjectSheet(projects: controller.projects) { project in
@@ -361,7 +363,10 @@ private struct ProjectRow<MenuContent: View>: View {
                     menu()
                 } label: {
                     Image(systemName: "ellipsis")
+                        .symbolRenderingMode(.monochrome)
+                        .foregroundStyle(Color.primary)
                 }
+                .tint(.primary)
                 .menuStyle(.borderlessButton)
                 .menuIndicator(.hidden)
                 .fixedSize()
