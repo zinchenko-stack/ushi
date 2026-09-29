@@ -279,7 +279,9 @@ struct RecordingView: View {
         defer { isWorking = false }
         do {
             let result = try await recorder.stop()
-            let rec = store.addRecording(audioURL: result.url, duration: result.duration)
+            let rec = store.addRecording(audioURL: result.url,
+                                         voiceTrackURL: result.voiceTrackURL,
+                                         duration: result.duration)
             showSavedToast(rec)
         } catch {
             errorMessage = error.localizedDescription
