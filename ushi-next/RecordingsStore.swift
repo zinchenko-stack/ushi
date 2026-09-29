@@ -218,6 +218,41 @@ final class RecordingsStore {
         recordings[idx] = rec
     }
 
+    // MARK: - Перенос из старого Ushi (Phase 6)
+
+    /// Идёт перенос: сколько записей готово из скольких. nil — не идёт.
+    private(set) var legacyImportProgress: (done: Int, total: Int)?
+
+    /// Сколько записей старого Ushi ещё не перенесено.
+    func pendingLegacyCount() -> Int {
+        LegacyUshiImporter.pendingRecordings(existingIDs: Set(recordings.map(\.id))).count
+    }
+
+    /// Перенести (скопировать) записи старого Ushi в «Записи». Возвращает число перенесённых.
+    @discardableResult
+    func importFromLegacyUshi() async -> Int {
+        guard legacyImportProgress == nil, let legacyDir = LegacyUshiImporter.legacyDirectory else { return 0 }
+        let pending = LegacyUshiImporter.pendingRecordings(existingIDs: Set(recordings.map(\.id)))
+        guard !pending.isEmpty else { return 0 }
+
+        legacyImportProgress = (0, pending.count)
+        defer { legacyImportProgress = nil }
+        var count = 0
+        for old in pending {
+            let rec = await LegacyUshiImporter.prepare(old, legacyDir: legacyDir)
+            if !recordings.contains(where: { $0.id == rec.id }) {
+                recordings.append(rec)
+                count += 1
+            }
+            legacyImportProgress = (count, pending.count)
+        }
+        recordings.sort { $0.createdAt > $1.createdAt }
+        saveNow()
+        // Записи без расшифровки, но со звуком — в очередь.
+        await processPendingTranscriptions()
+        return count
+    }
+
     /// Форматы, которые умеет расшифровка (afconvert → wav). Только аудио.
     static let importableAudioExtensions: Set<String> = ["mp3", "m4a", "wav", "aac", "aif", "aiff", "caf"]
 

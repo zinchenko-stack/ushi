@@ -14,6 +14,8 @@ struct ContentView: View {
     @Environment(UpdateChecker.self) private var updateChecker
     @Environment(ModelManager.self) private var modelManager
     @AppStorage("update.dismissedVersion") private var dismissedUpdateVersion = ""
+    @AppStorage("legacyImport.offered") private var legacyImportOffered = false
+    @State private var legacyPendingCount = 0
 
     init(recordingController: RecordingController) {
         self.recordingController = recordingController
@@ -24,6 +26,20 @@ struct ContentView: View {
         VStack(spacing: 0) {
             DownloadBanner()
                 .transition(.move(edge: .top).combined(with: .opacity))
+
+            if let progress = recordingController.store.legacyImportProgress {
+                HStack(spacing: 12) {
+                    ProgressView(value: Double(progress.done), total: Double(max(progress.total, 1)))
+                        .frame(width: 120)
+                    Text("Переношу записи из Ushi · \(progress.done) из \(progress.total)")
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 9)
+                .background(.thinMaterial)
+            }
 
             // Экрана-блокировки «нужен доступ» больше нет: окно открывается всегда,
             // а доступ к записи экрана macOS спрашивает сама при первой записи.
@@ -46,6 +62,26 @@ struct ContentView: View {
         }
         .task {
             await updateChecker.check()
+        }
+        // Phase 6 (§11): один раз предложить перенести записи из старого Ushi.
+        .task {
+            guard !legacyImportOffered else { return }
+            legacyPendingCount = recordingController.store.pendingLegacyCount()
+        }
+        .alert(
+            "Найдены записи из Ushi",
+            isPresented: Binding(
+                get: { legacyPendingCount > 0 && !legacyImportOffered },
+                set: { if !$0 { legacyImportOffered = true } }
+            )
+        ) {
+            Button("Не сейчас", role: .cancel) { legacyImportOffered = true }
+            Button("Перенести") {
+                legacyImportOffered = true
+                Task { await recordingController.store.importFromLegacyUshi() }
+            }
+        } message: {
+            Text("\(legacyPendingCount) \(DeleteProjectSheet.recordingsWord(legacyPendingCount)) можно перенести в «Записи». Файлы копируются — старый Ushi останется как есть. Позже это можно сделать в Настройках.")
         }
         .task(id: modelManager.isReady) {
             guard modelManager.isReady else { return }
@@ -110,7 +146,7 @@ struct ContentView: View {
                 selection = .recording(rec.id)
             }
         case .settings:
-            SettingsView()
+            SettingsView(store: recordingController.store)
         case .recording(let id):
             if let rec = recordingController.store.recordings.first(where: { $0.id == id }) {
                 RecordingDetailView(recording: rec, store: recordingController.store)

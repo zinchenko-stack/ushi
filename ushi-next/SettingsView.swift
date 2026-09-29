@@ -9,6 +9,8 @@ import SwiftUI
 import AppKit
 
 struct SettingsView: View {
+    /// Для переноса записей из старого Ushi (Phase 6).
+    let store: RecordingsStore
 
     // Подтверждение, когда срок хранения уменьшают (часть файлов уйдёт при следующем запуске).
     private enum PendingConfirmation: Identifiable {
@@ -54,6 +56,7 @@ struct SettingsView: View {
             recordingSection
             qualitySection
             cleanupSection
+            legacySection
         }
         .formStyle(.grouped)
         .navigationTitle("Настройки")
@@ -126,6 +129,27 @@ struct SettingsView: View {
             LabeledContent("Расход места") {
                 Text(videoQuality.summary)
                     .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    // MARK: - Перенос из старого Ushi (Phase 6, §11)
+
+    private var legacySection: some View {
+        Section("Перенос из Ushi") {
+            let pending = store.pendingLegacyCount()
+            LabeledContent {
+                if let p = store.legacyImportProgress {
+                    Text("\(p.done) из \(p.total)…").monospacedDigit()
+                } else {
+                    Button("Перенести") {
+                        Task { await store.importFromLegacyUshi() }
+                    }
+                    .disabled(pending == 0)
+                }
+            } label: {
+                Text(pending == 0 ? "Все записи из Ushi уже перенесены" : "Не перенесено записей: \(pending)")
+                Text("Файлы копируются в «Записи», старый Ushi остаётся как есть.")
             }
         }
     }
