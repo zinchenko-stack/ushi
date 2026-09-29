@@ -220,33 +220,30 @@ private struct StartRecordingHeader: View {
     var onShowRecording: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Button(action: tap) {
-                HStack(spacing: 8) {
-                    Image(systemName: glyph)
+        Button(action: tap) {
+            HStack(spacing: 8) {
+                Image(systemName: glyph)
+                VStack(alignment: .leading, spacing: 1) {
                     Text(title)
                         .fontWeight(.semibold)
                         .monospacedDigit()
-                    Spacer(minLength: 0)
+                    // Что и куда будет записано — подсказка, менять на hero или в menu bar.
+                    Text(subtitle)
+                        .font(.caption)
+                        .opacity(0.8)
+                        .lineLimit(1)
                 }
-                .foregroundStyle(.white)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 9)
-                .background(RoundedRectangle(cornerRadius: 8).fill(fill))
-                .contentShape(Rectangle())
+                Spacer(minLength: 0)
             }
-            .buttonStyle(.plain)
-            .disabled(controller.isBusy)
-            .opacity(controller.isBusy ? 0.6 : 1)
-
-            if !controller.isRecording && !controller.isCountingDown {
-                PresetChip(preset: $controller.globalPreset)
-            } else if let project = controller.activeProject {
-                Label(project.name, systemImage: "folder")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
+            .foregroundStyle(.white)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .background(RoundedRectangle(cornerRadius: 8).fill(fill))
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
+        .disabled(controller.isBusy)
+        .opacity(controller.isBusy ? 0.6 : 1)
         .padding(.horizontal, 12)
         .padding(.top, 8)
         .padding(.bottom, 4)
@@ -256,6 +253,13 @@ private struct StartRecordingHeader: View {
         if let cd = controller.countdown { return "Отмена · \(cd)" }
         if controller.isRecording { return "Остановить · \(formatTime(controller.recorder.elapsed))" }
         return "Начать запись"
+    }
+
+    private var subtitle: String {
+        let active = controller.isRecording || controller.isCountingDown
+        let preset = (active ? controller.activePreset : nil) ?? controller.globalPreset
+        let target = active ? (controller.activeProject?.name ?? "Записи") : nil
+        return [preset.shortTitle, target].compactMap { $0 }.joined(separator: " → ")
     }
 
     private var glyph: String {
