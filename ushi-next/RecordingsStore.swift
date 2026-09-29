@@ -6,6 +6,7 @@
 import Foundation
 import GRDB
 import Observation
+import AVFoundation
 
 @MainActor
 @Observable
@@ -215,6 +216,54 @@ final class RecordingsStore {
         rec.transcriptBookmark = result.transcriptBookmark
 
         recordings[idx] = rec
+    }
+
+    /// Форматы, которые умеет расшифровка (afconvert → wav). Только аудио.
+    static let importableAudioExtensions: Set<String> = ["mp3", "m4a", "wav", "aac", "aif", "aiff", "caf"]
+
+    /// Загрузка готового аудиофайла на расшифровку. Файл **копируется** в папку
+    /// Проекта (или «Записи»), оригинал не трогаем. Дальше — как у обычной
+    /// записи: расшифровка и авто-название. Пресет Проекта не меняется.
+    @discardableResult
+    func importAudio(from source: URL, into project: Project?) async throws -> Recording {
+        guard Self.importableAudioExtensions.contains(source.pathExtension.lowercased()) else {
+            throw RecordingsStoreError.unsupportedFile(source.lastPathComponent)
+        }
+        let dir = try ProjectFolders.recordingsDirectory(for: project)
+        let destination = FileMover.uniqueDestination(for: source.lastPathComponent, in: dir)
+        try await Task.detached(priority: .userInitiated) {
+            try FileManager.default.copyItem(at: source, to: destination)
+        }.value
+
+        let duration = (try? await AVURLAsset(url: destination).load(.duration).seconds) ?? 0
+        let fileSize = (try? destination.resourceValues(forKeys: [.fileSizeKey]).fileSize).map(Int64.init) ?? 0
+        let canTranscribe = ModelManager.shared.isReady
+        let preset = RecordingPreset.systemAndMic
+
+        let rec = Recording(
+            title: source.deletingPathExtension().lastPathComponent,
+            duration: duration.isFinite ? duration : 0,
+            audioFileName: destination.lastPathComponent,
+            storageFolderPath: dir.path,
+            status: canTranscribe ? .transcribing : .pending,
+            audioBookmark: FileBookmark.create(from: destination),
+            projectId: project?.id,
+            presetSnapshot: preset,
+            hasMicrophone: preset.hasMicrophone,
+            hasSystemAudio: preset.hasSystemAudio,
+            hasScreen: false,
+            titleSource: .fallback,   // имя файла заменится авто-названием после расшифровки
+            fileSize: fileSize
+        )
+        recordings.insert(rec, at: 0)
+
+        if canTranscribe {
+            let recordingID = rec.id
+            Task.detached(priority: .userInitiated) { [weak self] in
+                await self?.runTranscription(id: recordingID, audioURL: destination)
+            }
+        }
+        return rec
     }
 
     @discardableResult
@@ -626,9 +675,12 @@ final class RecordingsStore {
 enum RecordingsStoreError: LocalizedError {
     case busyTranscribing
     case anotherMoveInProgress
+    case unsupportedFile(String)
 
     var errorDescription: String? {
         switch self {
+        case .unsupportedFile(let name):
+            return "«\(name)» — неподдерживаемый формат. Можно загрузить аудио: mp3, m4a, wav, aac, aiff."
         case .busyTranscribing:
             return "Запись сейчас расшифровывается. Перенести её можно после окончания расшифровки."
         case .anotherMoveInProgress:

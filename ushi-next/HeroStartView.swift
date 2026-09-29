@@ -100,6 +100,14 @@ struct HeroStartView: View {
                 }
                 .opacity(controller.isRecording ? 1 : 0.4)
 
+            Button {
+                importAudio()
+            } label: {
+                Label("Загрузить аудио на расшифровку…", systemImage: "square.and.arrow.down")
+            }
+            .buttonStyle(.link)
+            .disabled(isActive)
+
             if let errorMessage = controller.errorMessage {
                 Text(errorMessage)
                     .font(.callout)
@@ -166,6 +174,29 @@ struct HeroStartView: View {
         .controlSize(.small)
         .fixedSize()
         .disabled(isActive)
+    }
+
+    // MARK: - Загрузка аудио
+
+    /// Файлы уходят в выбранный на chip-е Проект (или в «Записи»).
+    private func importAudio() {
+        let files = FolderPicker.chooseAudioFiles()
+        guard !files.isEmpty else { return }
+        let project = targetProject
+        Task {
+            var imported: Recording?
+            for file in files {
+                do {
+                    imported = try await controller.store.importAudio(from: file, into: project)
+                } catch {
+                    showSourceHint(error.localizedDescription)
+                }
+            }
+            controller.projects.reload()
+            if let imported, files.count == 1 {
+                showSavedToast(imported)
+            }
+        }
     }
 
     // MARK: - Источники

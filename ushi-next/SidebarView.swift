@@ -162,6 +162,11 @@ struct SidebarView: View {
             }
             Divider()
         }
+        Button("Загрузить аудио…") {
+            model.importAudio(into: project)
+        }
+        .disabled(!model.isAvailable(project))
+        Divider()
         Button(project.isPinned ? "Открепить" : "Закрепить") {
             model.togglePinned(project)
         }

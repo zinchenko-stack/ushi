@@ -193,6 +193,23 @@ final class SidebarViewModel {
         }
     }
 
+    /// «Загрузить аудио…»: выбрать файлы и отправить их на расшифровку в Проект
+    /// (или в «Записи» при nil).
+    func importAudio(into project: Project?) {
+        let files = FolderPicker.chooseAudioFiles()
+        guard !files.isEmpty else { return }
+        Task {
+            for file in files {
+                do {
+                    _ = try await store.importAudio(from: file, into: project)
+                } catch {
+                    alertMessage = error.localizedDescription
+                }
+            }
+            projectsModel.reload()
+        }
+    }
+
     // MARK: - Действия с записями
 
     func move(_ recording: Recording, to project: Project?) {

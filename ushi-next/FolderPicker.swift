@@ -7,6 +7,7 @@
 //
 
 import AppKit
+import UniformTypeIdentifiers
 
 enum FolderPicker {
     /// Модально показать выбор папки. nil — юзер отменил.
@@ -20,5 +21,18 @@ enum FolderPicker {
         panel.prompt = "Выбрать"
         guard panel.runModal() == .OK else { return nil }
         return panel.url
+    }
+
+    /// Выбрать один или несколько аудиофайлов для загрузки на расшифровку.
+    static func chooseAudioFiles() -> [URL] {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        panel.allowsMultipleSelection = true
+        panel.allowedContentTypes = RecordingsStore.importableAudioExtensions.compactMap { UTType(filenameExtension: $0) }
+        panel.message = "Выберите аудио для расшифровки"
+        panel.prompt = "Загрузить"
+        guard panel.runModal() == .OK else { return [] }
+        return panel.urls
     }
 }
