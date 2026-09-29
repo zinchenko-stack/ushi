@@ -81,13 +81,6 @@ struct HeroStartView: View {
                 }
             }
 
-            if let sourceHint {
-                Text(sourceHint)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .transition(.opacity)
-            }
-
             Text(statusText)
                 .font(.title3)
                 .foregroundStyle(.secondary)
@@ -262,7 +255,23 @@ struct HeroStartView: View {
 
     @ViewBuilder
     private var savedToast: some View {
-        if let rec = savedRecording {
+        if let sourceHint {
+            // Подсказка — в той же плашке, что и «Запись сохранена».
+            HStack(alignment: .center, spacing: 10) {
+                Image(systemName: "info.circle.fill")
+                    .foregroundStyle(.secondary)
+                Text(sourceHint)
+                    .fontWeight(.medium)
+            }
+            .font(.callout)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .background(.regularMaterial, in: Capsule())
+            .overlay(Capsule().strokeBorder(.quaternary, lineWidth: 1))
+            .shadow(color: .black.opacity(0.15), radius: 8, y: 2)
+            .padding(.bottom, 28)
+            .transition(.move(edge: .bottom).combined(with: .opacity))
+        } else if let rec = savedRecording {
             Button {
                 dismissToast()
                 onOpenRecording(rec)
