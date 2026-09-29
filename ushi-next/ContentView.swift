@@ -83,6 +83,14 @@ struct ContentView: View {
         } message: {
             Text("\(legacyPendingCount) \(DeleteProjectSheet.recordingsWord(legacyPendingCount)) можно перенести в «Записи». Файлы копируются — старый Ushi останется как есть. Позже это можно сделать в Настройках.")
         }
+        .alert("Перенос не завершён", isPresented: Binding(
+            get: { recordingController.store.legacyImportError != nil },
+            set: { if !$0 { recordingController.store.legacyImportError = nil } }
+        )) {
+            Button("OK") { recordingController.store.legacyImportError = nil }
+        } message: {
+            Text(recordingController.store.legacyImportError ?? "")
+        }
         .task(id: modelManager.isReady) {
             guard modelManager.isReady else { return }
             await recordingController.store.processPendingTranscriptions()
@@ -128,6 +136,12 @@ struct ContentView: View {
                     }
             }
             .frame(minWidth: 620, maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .onChange(of: recordingController.isCreatingProjectFromMenu, initial: true) { _, requested in
+            if requested {
+                sidebarModel.startCreatingProject()
+                recordingController.isCreatingProjectFromMenu = false
+            }
         }
         // При смене раздела сбрасываем стек, чтобы не оставалась открытая деталь.
         .onChange(of: selection) { _, _ in path = [] }

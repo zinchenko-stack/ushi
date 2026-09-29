@@ -176,10 +176,13 @@ final class AudioRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
             self.startDate = Date()
             self.elapsed = 0
             self.isRecording = true
-            self.timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+            let timer = Timer(timeInterval: 0.1, repeats: true) { [weak self] _ in
                 guard let self, let start = self.startDate else { return }
                 self.elapsed = Date().timeIntervalSince(start)
             }
+            self.timer = timer
+            // Открытое меню переключает run loop в tracking mode.
+            RunLoop.main.add(timer, forMode: .common)
         }
     }
 
@@ -197,7 +200,7 @@ final class AudioRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
         }
         stream = nil
 
-        let duration = elapsed
+        let duration = startDate.map { Date().timeIntervalSince($0) } ?? elapsed
         await MainActor.run {
             self.timer?.invalidate()
             self.timer = nil

@@ -20,6 +20,8 @@ final class RecordingController {
     let store: RecordingsStore
     let projects: ProjectsModel
 
+    var isCreatingProjectFromMenu = false
+
     private(set) var isBusy = false
     private(set) var errorMessage: String?
     private(set) var lastSavedRecording: Recording?
@@ -69,13 +71,13 @@ final class RecordingController {
     // MARK: - Старт
 
     /// Главная кнопка / menu bar «Начать запись»: в «Записи» с глобальным пресетом (§7.1, путь 1).
-    func startInInbox(withCountdown: Bool = true) async {
-        await start(preset: globalPreset, project: nil, withCountdown: withCountdown)
+    func startInInbox(withCountdown: Bool = true, alertOnFailure: Bool = false) async {
+        await start(preset: globalPreset, project: nil, withCountdown: withCountdown, alertOnFailure: alertOnFailure)
     }
 
     /// ⏺ у Проекта: в Проект с его пресетом (§7.1, путь 2).
-    func startInProject(_ project: Project, withCountdown: Bool = true) async {
-        await start(preset: project.lastUsedPreset, project: project, withCountdown: withCountdown)
+    func startInProject(_ project: Project, withCountdown: Bool = true, alertOnFailure: Bool = false) async {
+        await start(preset: project.lastUsedPreset, project: project, withCountdown: withCountdown, alertOnFailure: alertOnFailure)
     }
 
     /// Общий путь старта, в т.ч. из hero-экрана с выбранными chip-ами (§7.1, путь 3).

@@ -35,19 +35,22 @@ struct UshiMenuBarView: View {
 
             Button("Начать запись") {
                 // Из menu bar — сразу, без отсчёта: окно может быть скрыто.
-                Task { await controller.startInInbox(withCountdown: false) }
+                Task { await controller.startInInbox(withCountdown: false, alertOnFailure: true) }
             }
             .disabled(!isIdle)
 
             Menu("Записать в проект") {
                 ForEach(projects) { project in
                     Button(project.name) {
-                        Task { await controller.startInProject(project, withCountdown: false) }
+                        Task { await controller.startInProject(project, withCountdown: false, alertOnFailure: true) }
                     }
                     .disabled(!controller.projects.isAvailable(project))
                 }
                 if !projects.isEmpty { Divider() }
-                Button("Создать проект…") { openMainWindow() }
+                Button("Создать проект…") {
+                    controller.isCreatingProjectFromMenu = true
+                    openMainWindow()
+                }
             }
             .disabled(!isIdle)
 
