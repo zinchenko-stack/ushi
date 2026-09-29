@@ -19,8 +19,8 @@ enum LegacyUshiImporter {
     }
 
     /// Записи старого Ushi, которых ещё нет в UshiNext. Пусто — предлагать нечего.
-    static func pendingRecordings(existingIDs: Set<UUID>) -> [Recording] {
-        guard let dir = legacyDirectory,
+    static func pendingRecordings(existingIDs: Set<UUID>, directory: URL? = legacyDirectory) -> [Recording] {
+        guard let dir = directory,
               let data = try? Data(contentsOf: dir.appendingPathComponent("recordings.json")) else { return [] }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
@@ -30,44 +30,44 @@ enum LegacyUshiImporter {
 
     /// Скопировать файлы одной записи и вернуть её в виде для UshiNext
     /// (без Проекта — попадает в «Записи»). Копирование — в фоне.
-    static func prepare(_ old: Recording, legacyDir: URL) async -> Recording {
+    static func prepare(_ old: Recording, legacyDir: URL) async throws -> Recording {
         var rec = old
         rec.projectId = nil
-
-        // Медиа → «Записи» UshiNext.
+        rec.audioBookmark = nil
+        rec.transcriptBookmark = nil
+        rec.transcriptFileName = nil
+        let dir = try AppSettings.orphanRecordingsDirectory()
+        rec.storageFolderPath = dir.path
+        var copied: [URL] = []
         var hadMedia = false
-        let sourceMedia = URL(fileURLWithPath: old.storageFolderPath ?? NSHomeDirectory(), isDirectory: true)
-            .appendingPathComponent(old.audioFileName)
-        if !old.audioRemoved, !old.audioFileName.isEmpty,
-           FileManager.default.fileExists(atPath: sourceMedia.path),
-           let dir = try? AppSettings.orphanRecordingsDirectory() {
-            let dest = FileMover.uniqueDestination(for: old.audioFileName, in: dir)
-            if await copy(sourceMedia, to: dest) {
+        do {
+            if !old.audioRemoved, !old.audioFileName.isEmpty {
+                let source = old.audioBookmark.flatMap { FileBookmark.resolve($0)?.url }
+                    ?? URL(fileURLWithPath: old.storageFolderPath ?? NSHomeDirectory() + "/Documents/ushi")
+                        .appendingPathComponent(old.audioFileName)
+                let dest = FileMover.uniqueDestination(for: old.audioFileName, in: dir)
+                try await copy(source, to: dest)
+                copied.append(dest)
                 hadMedia = true
                 rec.audioFileName = dest.lastPathComponent
-                rec.storageFolderPath = dir.path
                 rec.audioBookmark = FileBookmark.create(from: dest)
                 rec.fileSize = (try? dest.resourceValues(forKeys: [.fileSizeKey]).fileSize).map(Int64.init) ?? 0
             }
-        }
-        if !hadMedia {
-            rec.audioRemoved = true
-            rec.audioBookmark = nil
-        }
+            rec.audioRemoved = !hadMedia
 
-        // Транскрипт → служебная папка UshiNext.
-        rec.transcriptBookmark = nil
-        if let name = old.transcriptFileName, !name.isEmpty,
-           let txtDir = try? AppSettings.transcriptsDirectory() {
-            let source = legacyDir.appendingPathComponent("transcripts").appendingPathComponent(name)
-            let dest = txtDir.appendingPathComponent(name)
-            var available = FileManager.default.fileExists(atPath: dest.path)
-            if !available { available = await copy(source, to: dest) }
-            if available {
+            if let name = old.transcriptFileName, !name.isEmpty {
+                let source = old.transcriptBookmark.flatMap { FileBookmark.resolve($0)?.url }
+                    ?? legacyDir.appendingPathComponent("transcripts").appendingPathComponent(name)
+                let txtDir = try AppSettings.transcriptsDirectory()
+                let dest = FileMover.uniqueDestination(for: name, in: txtDir)
+                try await copy(source, to: dest)
+                copied.append(dest)
+                rec.transcriptFileName = dest.lastPathComponent
                 rec.transcriptBookmark = FileBookmark.create(from: dest)
-            } else {
-                rec.transcriptFileName = nil
             }
+        } catch {
+            for url in copied { try? FileManager.default.removeItem(at: url) }
+            throw error
         }
 
         // Статус: есть текст — готово; нет текста, но есть звук — в очередь; иначе — ошибка.
@@ -83,9 +83,9 @@ enum LegacyUshiImporter {
         return rec
     }
 
-    private static func copy(_ source: URL, to dest: URL) async -> Bool {
-        await Task.detached(priority: .userInitiated) {
-            (try? FileManager.default.copyItem(at: source, to: dest)) != nil
+    private static func copy(_ source: URL, to dest: URL) async throws {
+        try await Task.detached(priority: .userInitiated) {
+            try FileManager.default.copyItem(at: source, to: dest)
         }.value
     }
 }

@@ -162,6 +162,10 @@ final class SidebarViewModel {
     }
 
     func deleteProject(_ project: Project, deleteRecordings: Bool) {
+        guard controller.activeProjectID != project.id else {
+            alertMessage = "Сначала остановите запись в этом проекте."
+            return
+        }
         Task {
             do {
                 try await projectsModel.delete(project, deleteRecordings: deleteRecordings, recordings: store)

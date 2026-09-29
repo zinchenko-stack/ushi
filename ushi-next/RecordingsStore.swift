@@ -20,8 +20,8 @@ final class RecordingsStore {
     @ObservationIgnored private var saveTask: Task<Void, Never>?
     @ObservationIgnored private var isProcessingPending = false
 
-    init(dbQueue: DatabaseQueue = AppDatabase.shared) {
-        self.dbQueue = dbQueue
+    init(dbQueue: DatabaseQueue? = nil) {
+        self.dbQueue = dbQueue ?? AppDatabase.shared
         load()
         recoverStuckRecordings()
         cleanupOrphanedSummaries()
@@ -139,24 +139,18 @@ final class RecordingsStore {
     /// в «Записи», потому что его папка будет удалена; файлы external-Проекта
     /// остаются в папке юзера — её мы не трогаем. Сразу пишет в БД, чтобы
     /// ON DELETE у project не разошёлся с кэшем.
-    func detachRecordings(fromProject projectID: UUID, deleteFiles: Bool, moveFiles: Bool) async {
+    func detachRecordings(fromProject projectID: UUID, deleteFiles: Bool, moveFiles: Bool) async throws {
+        defer { saveNow() }
         for rec in recordings(inProject: projectID) {
             if deleteFiles {
                 delete(rec)
             } else if !moveFiles {
                 update(id: rec.id) { $0.projectId = nil }
             } else {
-                do {
-                    try await move(rec, to: nil)
-                } catch {
-                    // Файл не переехал (например, идёт транскрипция) — всё равно
-                    // отвязываем от Проекта; bookmark найдёт файл, если он остался.
-                    update(id: rec.id) { $0.projectId = nil }
-                    print("⚠️ move to orphan failed: \(error.localizedDescription)")
-                }
+                // Не удаляем проект и его папку, если хотя бы один файл не переехал.
+                try await move(rec, to: nil)
             }
         }
-        saveNow()
     }
 
     /// После «Подключить заново» (Phase 3): записи Проекта, чей файл потерялся,
@@ -223,6 +217,8 @@ final class RecordingsStore {
     /// Идёт перенос: сколько записей готово из скольких. nil — не идёт.
     private(set) var legacyImportProgress: (done: Int, total: Int)?
 
+    var legacyImportError: String?
+
     /// Сколько записей старого Ushi ещё не перенесено.
     func pendingLegacyCount() -> Int {
         LegacyUshiImporter.pendingRecordings(existingIDs: Set(recordings.map(\.id))).count
@@ -235,11 +231,18 @@ final class RecordingsStore {
         let pending = LegacyUshiImporter.pendingRecordings(existingIDs: Set(recordings.map(\.id)))
         guard !pending.isEmpty else { return 0 }
 
+        legacyImportError = nil
         legacyImportProgress = (0, pending.count)
         defer { legacyImportProgress = nil }
         var count = 0
         for old in pending {
-            let rec = await LegacyUshiImporter.prepare(old, legacyDir: legacyDir)
+            let rec: Recording
+            do {
+                rec = try await LegacyUshiImporter.prepare(old, legacyDir: legacyDir)
+            } catch {
+                legacyImportError = "Не удалось перенести часть записей. Старые файлы сохранены. Повторите перенос в Настройках.\n" + error.localizedDescription
+                continue
+            }
             if !recordings.contains(where: { $0.id == rec.id }) {
                 recordings.append(rec)
                 count += 1
@@ -264,13 +267,23 @@ final class RecordingsStore {
         guard Self.importableAudioExtensions.contains(source.pathExtension.lowercased()) else {
             throw RecordingsStoreError.unsupportedFile(source.lastPathComponent)
         }
+        let asset = AVURLAsset(url: source)
+        let duration: Double
+        do {
+            let tracks = try await asset.loadTracks(withMediaType: .audio)
+            duration = try await asset.load(.duration).seconds
+            guard !tracks.isEmpty, duration.isFinite, duration > 0 else {
+                throw RecordingsStoreError.invalidAudio
+            }
+        } catch {
+            throw RecordingsStoreError.invalidAudio
+        }
         let dir = try ProjectFolders.recordingsDirectory(for: project)
         let destination = FileMover.uniqueDestination(for: source.lastPathComponent, in: dir)
         try await Task.detached(priority: .userInitiated) {
             try FileManager.default.copyItem(at: source, to: destination)
         }.value
 
-        let duration = (try? await AVURLAsset(url: destination).load(.duration).seconds) ?? 0
         let fileSize = (try? destination.resourceValues(forKeys: [.fileSizeKey]).fileSize).map(Int64.init) ?? 0
         let canTranscribe = ModelManager.shared.isReady
         let preset = RecordingPreset.systemAndMic
@@ -541,13 +554,11 @@ final class RecordingsStore {
                   let recording = recordings.first(where: { $0.id == id }),
                   recording.status == .pending else { continue }
 
-            guard canRetryTranscription(recording) else {
+            guard !recording.audioRemoved, let (audioURL, _) = recording.resolveAudioURL() else {
                 update(id: id) { $0.status = .failed }
                 continue
             }
 
-            let audioURL = mediaDirectory(for: recording)
-                .appendingPathComponent(recording.audioFileName)
             update(id: id) { $0.status = .transcribing }
             await runTranscription(id: id, audioURL: audioURL)
         }
@@ -711,9 +722,12 @@ enum RecordingsStoreError: LocalizedError {
     case busyTranscribing
     case anotherMoveInProgress
     case unsupportedFile(String)
+    case invalidAudio
 
     var errorDescription: String? {
         switch self {
+        case .invalidAudio:
+            return "Не удалось прочитать аудио. Файл повреждён или не содержит звука. Выберите другой файл."
         case .unsupportedFile(let name):
             return "«\(name)» — неподдерживаемый формат. Можно загрузить аудио: mp3, m4a, wav, aac, aiff."
         case .busyTranscribing:

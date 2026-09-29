@@ -153,7 +153,7 @@ final class ProjectsModel {
         guard !busy else { throw ProjectsModelError.transcriptionInProgress }
 
         let isManaged = project.storage == .managed
-        await recordings.detachRecordings(
+        try await recordings.detachRecordings(
             fromProject: project.id,
             deleteFiles: deleteRecordings,
             moveFiles: isManaged
