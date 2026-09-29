@@ -51,10 +51,7 @@ struct HeroStartView: View {
             .contentTransition(.numericText())
             .animation(.easeInOut(duration: 0.15), value: controller.countdown)
 
-            HStack(spacing: 10) {
-                PresetChip(preset: presetBinding, isDisabled: isActive)
-                projectChip
-            }
+            projectChip
 
             Button(action: handleTap) {
                 ZStack {
@@ -67,6 +64,19 @@ struct HeroStartView: View {
             }
             .buttonStyle(.plain)
             .disabled(controller.isBusy)
+
+            // Источники — три круглые кнопки-переключателя под кнопкой записи.
+            HStack(spacing: 14) {
+                ForEach(RecordingPreset.Source.available, id: \.self) { source in
+                    SourceToggleButton(
+                        source: source,
+                        isOn: presetBinding.wrappedValue.contains(source),
+                        isEnabled: !isActive && presetBinding.wrappedValue.canToggle(source)
+                    ) {
+                        presetBinding.binding(for: source).wrappedValue.toggle()
+                    }
+                }
+            }
 
             Text(statusText)
                 .font(.title3)
@@ -271,5 +281,31 @@ struct HeroStartView: View {
         } else {
             return String(format: "%02d:%02d", m, s)
         }
+    }
+}
+
+/// Круглая кнопка-переключатель источника: включена — залита акцентом,
+/// выключена — серая. Название — во всплывающей подсказке.
+private struct SourceToggleButton: View {
+    let source: RecordingPreset.Source
+    let isOn: Bool
+    let isEnabled: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: source.systemImage)
+                .font(.system(size: 17, weight: .medium))
+                .foregroundStyle(isOn ? Color.white : Color.secondary)
+                .frame(width: 44, height: 44)
+                .background(Circle().fill(isOn ? Color.accentColor : Color.secondary.opacity(0.18)))
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!isEnabled)
+        .opacity(isEnabled || isOn ? 1 : 0.5)
+        .help(isOn ? "\(source.title): включено" : "\(source.title): выключено")
+        .accessibilityLabel(source.title)
+        .accessibilityValue(isOn ? "включено" : "выключено")
     }
 }

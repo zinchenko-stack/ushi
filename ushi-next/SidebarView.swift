@@ -249,31 +249,6 @@ private struct NewRecordingRow: View {
     }
 }
 
-/// Chip-выпадашка выбора источников: `[🔊 Звук + микрофон ▾]`,
-/// внутри — три независимых переключателя с галочками.
-struct PresetChip: View {
-    @Binding var preset: RecordingPreset
-    var isDisabled = false
-
-    var body: some View {
-        Menu {
-            ForEach(RecordingPreset.Source.available, id: \.self) { source in
-                Toggle(isOn: $preset.binding(for: source)) {
-                    Label(source.title, systemImage: source.systemImage)
-                }
-                .disabled(!preset.canToggle(source))
-            }
-        } label: {
-            Label(preset.shortTitle, systemImage: preset.systemImage)
-        }
-        .menuStyle(.button)
-        .buttonStyle(.bordered)
-        .controlSize(.small)
-        .fixedSize()
-        .disabled(isDisabled)
-    }
-}
-
 extension Binding where Value == RecordingPreset {
     /// Галочка источника. Выключить последний звуковой источник нельзя —
     /// такое переключение молча игнорируется (пункт в UI и так disabled).
