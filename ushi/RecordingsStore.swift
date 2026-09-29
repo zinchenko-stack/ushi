@@ -143,7 +143,7 @@ final class RecordingsStore {
     }
 
     @discardableResult
-    func addRecording(audioURL: URL, duration: TimeInterval) -> Recording {
+    func addRecording(audioURL: URL, voiceTrackURL: URL? = nil, duration: TimeInterval) -> Recording {
         let canTranscribe = ModelManager.shared.isReady
         let rec = Recording(
             title: "Запись от " + Self.shortDateString(Date()),
@@ -151,14 +151,16 @@ final class RecordingsStore {
             audioFileName: audioURL.lastPathComponent,
             storageFolderPath: audioURL.deletingLastPathComponent().path,
             status: canTranscribe ? .transcribing : .pending,
-            audioBookmark: FileBookmark.create(from: audioURL)
+            audioBookmark: FileBookmark.create(from: audioURL),
+            voiceTrackFileName: voiceTrackURL?.lastPathComponent
         )
         recordings.insert(rec, at: 0)
 
         if canTranscribe {
             let recordingID = rec.id
             Task.detached(priority: .userInitiated) { [weak self] in
-                await self?.runTranscription(id: recordingID, audioURL: audioURL)
+                await self?.runTranscription(id: recordingID, audioURL: audioURL,
+                                             voiceTrackURL: voiceTrackURL)
             }
         }
         return rec
@@ -189,8 +191,10 @@ final class RecordingsStore {
         guard ModelManager.shared.isReady else { return }
 
         let recordingID = recording.id
+        let voiceTrackURL = recording.voiceTrackURL()
         Task.detached(priority: .userInitiated) { [weak self] in
-            await self?.runTranscription(id: recordingID, audioURL: audioURL)
+            await self?.runTranscription(id: recordingID, audioURL: audioURL,
+                                         voiceTrackURL: voiceTrackURL)
         }
     }
 
@@ -252,6 +256,11 @@ final class RecordingsStore {
             if fm.fileExists(atPath: url.path) {
                 try? fm.removeItem(at: url)
             }
+            // Голосовая дорожка — та же речь, живёт не дольше основного файла.
+            if let voiceURL = rec.voiceTrackURL() {
+                try? fm.removeItem(at: voiceURL)
+            }
+            rec.voiceTrackFileName = nil
             rec.audioRemoved = true
             recordings[idx] = rec
         }
@@ -352,15 +361,17 @@ final class RecordingsStore {
             let audioURL = mediaDirectory(for: recording)
                 .appendingPathComponent(recording.audioFileName)
             update(id: id) { $0.status = .transcribing }
-            await runTranscription(id: id, audioURL: audioURL)
+            await runTranscription(id: id, audioURL: audioURL,
+                                   voiceTrackURL: recording.voiceTrackURL())
         }
     }
 
-    private func runTranscription(id: UUID, audioURL: URL) async {
+    private func runTranscription(id: UUID, audioURL: URL, voiceTrackURL: URL? = nil) async {
         do {
             let outputDir = try AppSettings.transcriptsDirectory()
             let txtURL = try await TranscriptionService.transcribe(
                 audioURL: audioURL,
+                voiceTrackURL: voiceTrackURL,
                 outputDirectory: outputDir
             )
             let transcriptBookmark = FileBookmark.create(from: txtURL)
@@ -437,6 +448,9 @@ final class RecordingsStore {
         }
         if let (txtURL, _) = recording.resolveTranscriptURL() {
             try? fm.removeItem(at: txtURL)
+        }
+        if let voiceURL = recording.voiceTrackURL() {
+            try? fm.removeItem(at: voiceURL)
         }
     }
 

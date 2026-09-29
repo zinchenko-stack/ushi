@@ -28,6 +28,9 @@ struct Recording: Identifiable, Codable, Hashable {
     var audioBookmark: Data?
     /// Аналогично для .txt транскрипта.
     var transcriptBookmark: Data?
+    /// Стерео-дорожка «микрофон / система» в служебной папке voices/.
+    /// Есть только у записей, сделанных с микрофоном; по ней размечаются говорящие.
+    var voiceTrackFileName: String?
 
     init(
         id: UUID = UUID(),
@@ -40,7 +43,8 @@ struct Recording: Identifiable, Codable, Hashable {
         status: ProcessingStatus = .pending,
         audioRemoved: Bool = false,
         audioBookmark: Data? = nil,
-        transcriptBookmark: Data? = nil
+        transcriptBookmark: Data? = nil,
+        voiceTrackFileName: String? = nil
     ) {
         self.id = id
         self.title = title
@@ -53,6 +57,7 @@ struct Recording: Identifiable, Codable, Hashable {
         self.audioRemoved = audioRemoved
         self.audioBookmark = audioBookmark
         self.transcriptBookmark = transcriptBookmark
+        self.voiceTrackFileName = voiceTrackFileName
     }
 
     // MARK: - Совместимость со старым JSON
@@ -67,6 +72,7 @@ struct Recording: Identifiable, Codable, Hashable {
         case audioFileName, transcriptFileName, storageFolderPath
         case status, audioRemoved
         case audioBookmark, transcriptBookmark
+        case voiceTrackFileName
         case transcriptionStatus // legacy
     }
 
@@ -82,6 +88,7 @@ struct Recording: Identifiable, Codable, Hashable {
         audioRemoved = try c.decodeIfPresent(Bool.self, forKey: .audioRemoved) ?? false
         audioBookmark = try c.decodeIfPresent(Data.self, forKey: .audioBookmark)
         transcriptBookmark = try c.decodeIfPresent(Data.self, forKey: .transcriptBookmark)
+        voiceTrackFileName = try c.decodeIfPresent(String.self, forKey: .voiceTrackFileName)
 
         // Сначала пробуем новый статус, потом legacy. Снятые статусы
         // (extracting/summarizing) маппим как незавершённую обработку.
@@ -123,6 +130,7 @@ struct Recording: Identifiable, Codable, Hashable {
         try c.encode(audioRemoved, forKey: .audioRemoved)
         try c.encodeIfPresent(audioBookmark, forKey: .audioBookmark)
         try c.encodeIfPresent(transcriptBookmark, forKey: .transcriptBookmark)
+        try c.encodeIfPresent(voiceTrackFileName, forKey: .voiceTrackFileName)
     }
 
     func storageDirectoryURL() -> URL {
@@ -145,6 +153,14 @@ struct Recording: Identifiable, Codable, Hashable {
         guard let name = transcriptFileName, !name.isEmpty,
               let dir = transcriptDirectoryURL() else { return nil }
         return dir.appendingPathComponent(name)
+    }
+
+    /// Голосовая дорожка, если она ещё лежит на диске.
+    func voiceTrackURL() -> URL? {
+        guard let name = voiceTrackFileName, !name.isEmpty,
+              let dir = try? AppSettings.voiceTracksDirectory() else { return nil }
+        let url = dir.appendingPathComponent(name)
+        return FileManager.default.fileExists(atPath: url.path) ? url : nil
     }
 
     // MARK: - Bookmark-based резолверы
