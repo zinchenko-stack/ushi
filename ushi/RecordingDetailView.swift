@@ -242,9 +242,7 @@ struct RecordingDetailView: View {
                     statusBlock("Не удалось создать транскрипцию", isError: true, recording: rec)
                 case .done:
                     if let text = transcriptText, !text.isEmpty {
-                        Text(text)
-                            .textSelection(.enabled)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                        TranscriptDialogView(text: text)
                     } else {
                         Text("Транскрипция недоступна").foregroundStyle(.secondary)
                     }
@@ -386,5 +384,62 @@ private struct CopyButton: View {
         }
         .buttonStyle(.bordered)
         .animation(.easeInOut(duration: 0.15), value: copied)
+    }
+}
+
+/// Расшифровка как диалог: имя говорящего («Я», «Собеседник») — заголовком
+/// над его репликой. Без меток — обычный текст. Сам файл не меняется.
+private struct TranscriptDialogView: View {
+    let text: String
+
+    private struct Block: Identifiable {
+        let id: Int
+        let speaker: String?
+        var body: String
+    }
+
+    private static let labels = ["Я", "Собеседник"]
+
+    private var blocks: [Block] {
+        var result: [Block] = []
+        for line in text.components(separatedBy: "\n") {
+            if let label = Self.labels.first(where: { line.hasPrefix($0 + ":") }) {
+                let rest = line.dropFirst(label.count + 1).trimmingCharacters(in: .whitespaces)
+                result.append(Block(id: result.count, speaker: label, body: rest))
+            } else if !result.isEmpty {
+                let trimmed = line.trimmingCharacters(in: .whitespaces)
+                if !trimmed.isEmpty {
+                    result[result.count - 1].body += (result[result.count - 1].body.isEmpty ? "" : "\n") + trimmed
+                }
+            } else {
+                result.append(Block(id: 0, speaker: nil, body: line))
+            }
+        }
+        return result
+    }
+
+    var body: some View {
+        let blocks = self.blocks
+        if blocks.allSatisfy({ $0.speaker == nil }) {
+            Text(text)
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        } else {
+            VStack(alignment: .leading, spacing: 20) {
+                ForEach(blocks) { block in
+                    VStack(alignment: .leading, spacing: 4) {
+                        if let speaker = block.speaker {
+                            Text(speaker)
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                        Text(block.body)
+                            .textSelection(.enabled)
+                            .lineSpacing(3)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+        }
     }
 }
