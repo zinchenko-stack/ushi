@@ -46,6 +46,9 @@ final class AudioRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
 
     // MARK: Приватное
 
+    @ObservationIgnored var onInterruption: (@MainActor (Error) async -> Void)?
+    private var recordingActivity: NSObjectProtocol?
+    private var isStopping = false
     private var stream: SCStream?
     private var writer: RecordingWriter?
     private var currentFileURL: URL?
@@ -67,7 +70,19 @@ final class AudioRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
     // MARK: Старт
 
     func start() async throws {
-        guard !isRecording else { return }
+        guard !isRecording, !isStopping else { return }
+        var started = false
+        defer {
+            if !started {
+                sampleQueue.sync {
+                    self.writer?.cancel()
+                    self.writer = nil
+                    self.currentFileURL = nil
+                }
+                stream = nil
+                endRecordingActivity()
+            }
+        }
 
         // 0. Доступ к микрофону спрашиваем ПЕРВЫМ (до Screen Recording),
         //    чтобы prompt разрешился заранее и первая же запись писала твой голос.
@@ -170,7 +185,9 @@ final class AudioRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
         }
         self.stream = stream
 
+        beginRecordingActivity()
         try await stream.startCapture()
+        started = true
 
         await MainActor.run {
             self.startDate = Date()
@@ -190,17 +207,22 @@ final class AudioRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
 
     @discardableResult
     func stop() async throws -> (url: URL, duration: TimeInterval) {
-        guard isRecording else {
+        guard isRecording, !isStopping else {
             throw NSError(domain: "ushi", code: 2,
                 userInfo: [NSLocalizedDescriptionKey: "Запись не идёт"])
         }
 
-        if let stream = stream {
-            try? await stream.stopCapture()
+        isStopping = true
+        defer {
+            isStopping = false
+            startDate = nil
+            endRecordingActivity()
         }
-        stream = nil
-
-        let duration = startDate.map { Date().timeIntervalSince($0) } ?? elapsed
+        let stoppingStream = stream
+        stream = nil // Delegate errors during an intentional stop must not finalize twice.
+        if let stoppingStream {
+            try? await stoppingStream.stopCapture()
+        }
         await MainActor.run {
             self.timer?.invalidate()
             self.timer = nil
@@ -223,13 +245,18 @@ final class AudioRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
                 cont.resume(returning: (w, u))
             }
         }
-        await writer?.complete()
+        try await writer?.complete()
 
         await MainActor.run { self.startDate = nil }
 
         guard let url else {
             throw NSError(domain: "ushi", code: 3,
                 userInfo: [NSLocalizedDescriptionKey: "Файл не создан"])
+        }
+        let duration = try await AVURLAsset(url: url).load(.duration).seconds
+        guard duration.isFinite, duration > 0 else {
+            throw NSError(domain: "ushi", code: 6,
+                userInfo: [NSLocalizedDescriptionKey: "Запись прервалась до получения звука или видео."])
         }
         return (url, duration)
     }
@@ -268,21 +295,25 @@ final class AudioRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
     // MARK: SCStreamDelegate
 
     func stream(_ stream: SCStream, didStopWithError error: Error) {
-        sampleQueue.async {
-            let w = self.writer
-            w?.finishInputs()
-            self.writer = nil
-            self.currentFileURL = nil
-            self.lastSystemRMS = 0
-            self.lastMicRMS = 0
-            Task { await w?.complete() }
-        }
-
         Task { @MainActor in
-            self.isRecording = false
-            self.timer?.invalidate()
-            self.timer = nil
-            self.level = 0
+            guard self.stream === stream, self.isRecording, !self.isStopping else { return }
+            self.stream = nil
+            await self.onInterruption?(error)
+        }
+    }
+
+    func beginRecordingActivity() {
+        guard recordingActivity == nil else { return }
+        recordingActivity = ProcessInfo.processInfo.beginActivity(
+            options: [.userInitiated, .idleSystemSleepDisabled, .idleDisplaySleepDisabled],
+            reason: "UshiNext: запись лекции"
+        )
+    }
+
+    func endRecordingActivity() {
+        if let recordingActivity {
+            ProcessInfo.processInfo.endActivity(recordingActivity)
+            self.recordingActivity = nil
         }
     }
 
@@ -333,7 +364,7 @@ final class AudioRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
 
 /// Пишет аудио-микс (система + микрофон) и, если задано, видео экрана в один файл.
 /// Все методы вызываются на одной очереди (sampleQueue), кроме complete().
-private final class RecordingWriter {
+final class RecordingWriter {
 
     enum Source { case system, microphone }
 
@@ -472,16 +503,23 @@ private final class RecordingWriter {
 
     /// Дописывает остаток и помечает входы законченными. Вызывать на sampleQueue.
     func finishInputs() {
+        guard writer.status == .writing else { return }
+        guard anchor != nil else { writer.cancelWriting(); return }
         flush(upTo: maxFrame, force: true)
         audioInput.markAsFinished()
         videoInput?.markAsFinished()
     }
 
     /// Дожидается записи файла на диск. Вызывать вне sampleQueue.
-    func complete() async {
-        await writer.finishWriting()
-        if let err = writer.error {
-            print("❌ writer error: \(err)")
+    func cancel() {
+        if writer.status == .writing || writer.status == .unknown { writer.cancelWriting() }
+    }
+
+    func complete() async throws {
+        if writer.status == .writing { await writer.finishWriting() }
+        guard writer.status == .completed else {
+            throw writer.error ?? NSError(domain: "ushi", code: 7,
+                userInfo: [NSLocalizedDescriptionKey: "Не удалось завершить файл записи. Проверь свободное место на диске."])
         }
     }
 

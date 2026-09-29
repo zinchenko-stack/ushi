@@ -30,6 +30,7 @@ final class RecordingController {
     private(set) var countdown: Int?
     @ObservationIgnored private var countdownTask: Task<Void, Never>?
     private let countdownStart = 3
+    @ObservationIgnored private var sleepObserver: NSObjectProtocol?
 
     /// Куда и с каким пресетом пишется текущая (или готовящаяся) запись.
     private(set) var activePreset: RecordingPreset?
@@ -49,6 +50,7 @@ final class RecordingController {
         self.store = RecordingsStore()
         self.projects = ProjectsModel()
         self.globalPreset = AppState.lastUsedPreset()
+        observeInterruptions()
     }
 
     init(
@@ -60,6 +62,24 @@ final class RecordingController {
         self.store = store
         self.projects = projects
         self.globalPreset = AppState.lastUsedPreset()
+        observeInterruptions()
+    }
+
+    private func observeInterruptions() {
+        recorder.onInterruption = { [weak self] error in
+            await self?.stop(alertOnFailure: false, interruption: "Захват прерван: \(error.localizedDescription)")
+        }
+        sleepObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.willSleepNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                await self?.stop(alertOnFailure: false, interruption: "Mac переходит в сон.")
+            }
+        }
+    }
+
+    deinit {
+        if let sleepObserver { NSWorkspace.shared.notificationCenter.removeObserver(sleepObserver) }
     }
 
     var isRecording: Bool { recorder.isRecording }
@@ -140,7 +160,7 @@ final class RecordingController {
 
     // MARK: - Стоп
 
-    func stop(alertOnFailure: Bool = true) async {
+    func stop(alertOnFailure: Bool = true, interruption: String? = nil) async {
         guard !isBusy, recorder.isRecording else { return }
 
         isBusy = true
@@ -160,9 +180,10 @@ final class RecordingController {
             if project == nil {
                 globalPreset = preset
             }
+            store.saveNow()
             projects.reload()
             lastSavedRecording = recording
-            errorMessage = nil
+            errorMessage = interruption.map { "\($0) Записанная часть сохранена." }
         } catch {
             handle(error, alertOnFailure: alertOnFailure)
         }
@@ -238,7 +259,7 @@ final class RecordingController {
     private func presentAlert(message: String) {
         let alert = NSAlert()
         alert.alertStyle = .warning
-        alert.messageText = "Не удалось начать запись"
+        alert.messageText = "Проблема с записью"
         alert.informativeText = message
         alert.addButton(withTitle: "OK")
         NSApp.activate(ignoringOtherApps: true)

@@ -19,6 +19,12 @@ enum AppSettings {
     static func autoDeleteVideo() -> Bool { false }
     static func audioRetentionDays() -> Int { 7 }
     static func videoRetentionDays() -> Int { 7 }
+    struct VideoQuality {
+        let maxHeight: Int? = nil
+        let bitrateBitsPerSecond = 4_000_000
+        let fps = 30
+    }
+    static func videoQuality() -> VideoQuality { VideoQuality() }
     enum Language: String { case auto }
     static func transcriptionLanguage() -> Language { .auto }
 }
@@ -26,8 +32,4 @@ enum AppSettings {
 @MainActor final class ModelManager {
     static let shared = ModelManager()
     var isReady = false
-}
-
-enum AudioRecorder {
-    static func documentsDirectory() throws -> URL { try AppSettings.recordingsDirectory() }
 }
