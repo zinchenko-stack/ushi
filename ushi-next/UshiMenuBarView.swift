@@ -2,6 +2,12 @@
 //  UshiMenuBarView.swift
 //  ushi
 //
+//  Menu bar v2 (Phase 5, §6.9 брифа). Меню — зеркало глобального состояния:
+//  источники правят тот же app.lastUsedPreset, что и окно. Во время записи
+//  сверху видно, сколько идёт и куда пишется.
+//  Стиль .menu: SwiftUI превращает содержимое в нативное NSMenu, поэтому здесь
+//  только Button / Toggle / Menu / Divider.
+//
 
 import SwiftUI
 import AppKit
@@ -10,139 +16,86 @@ struct UshiMenuBarView: View {
     @Environment(\.openWindow) private var openWindow
     @Bindable var recordingController: RecordingController
 
-    private var recorder: AudioRecorder { recordingController.recorder }
+    private var controller: RecordingController { recordingController }
+    private var recorder: AudioRecorder { controller.recorder }
+    private var projects: [Project] { controller.projects.projects }
+    private var isIdle: Bool { !controller.isRecording && !controller.isBusy && !controller.isCountingDown }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            MenuActionRow(
-                title: recorder.isRecording ? "Остановить запись" : "Начать запись",
-                isDisabled: recordingController.isBusy
-            ) {
-                Task {
-                    if recorder.isRecording {
-                        await recordingController.stop()
-                    } else {
-                        // Из menu bar — сразу, без отсчёта: окно может быть скрыто.
-                        await recordingController.startInInbox(withCountdown: false)
+        if controller.isRecording {
+            Text("● Идёт запись · \(formatTime(recorder.elapsed)) · \(controller.activeProject?.name ?? "Записи")")
+            Button("Остановить") {
+                Task { await controller.stop() }
+            }
+        } else {
+            // Верхняя строка — текущие источники (§6.9).
+            Text(controller.globalPreset.title)
+
+            Divider()
+
+            Button("Начать запись") {
+                // Из menu bar — сразу, без отсчёта: окно может быть скрыто.
+                Task { await controller.startInInbox(withCountdown: false) }
+            }
+            .disabled(!isIdle)
+
+            Menu("Записать в проект") {
+                ForEach(projects) { project in
+                    Button(project.name) {
+                        Task { await controller.startInProject(project, withCountdown: false) }
                     }
+                    .disabled(!controller.projects.isAvailable(project))
                 }
-                dismissPopover()
+                if !projects.isEmpty { Divider() }
+                Button("Создать проект…") { openMainWindow() }
             }
+            .disabled(!isIdle)
 
-            MenuDivider()
-
-            // Источники правят глобальный app.lastUsedPreset (§6.9) — тот же выбор,
-            // что под кнопкой «Начать запись» в окне. Полное меню v2 — Phase 5.
-            ForEach(RecordingPreset.Source.available, id: \.self) { source in
-                Toggle(source.title, isOn: $recordingController.globalPreset.binding(for: source))
-                    .disabled(
-                        recorder.isRecording
-                            || recordingController.isBusy
-                            || !recordingController.globalPreset.canToggle(source)
-                    )
+            Menu("Источник") {
+                ForEach(RecordingPreset.Source.available, id: \.self) { source in
+                    Toggle(source.title, isOn: $recordingController.globalPreset.binding(for: source))
+                        .disabled(!controller.globalPreset.canToggle(source))
+                }
             }
-
-            MenuDivider()
-
-            MenuActionRow(title: "Открыть Ushi") {
-                openWindow(id: "main")
-                NSApp.activate(ignoringOtherApps: true)
-                dismissPopover()
-            }
-
-            MenuActionRow(title: "Выйти") {
-                NSApp.terminate(nil)
-            }
+            .disabled(!isIdle)
         }
-        .padding(.vertical, 6)
-        .frame(width: 240)
-    }
 
-    private func dismissPopover() {
-        // MenuBarExtra(.window) рисуется как NSPanel — закрываем его, чтобы попап
-        // схлопнулся после клика на action-кнопку.
-        for window in NSApp.windows where window.isVisible {
-            let name = String(describing: type(of: window))
-            if name.contains("MenuBarExtra") || name.contains("Popover") {
-                window.close()
-                return
-            }
-        }
-    }
-}
-
-private struct MenuActionRow: View {
-    let title: String
-    var isDisabled: Bool = false
-    let action: () -> Void
-
-    @State private var isHovered = false
-
-    var body: some View {
-        Button(action: action) {
-            HStack {
-                Text(title)
-                    .foregroundStyle(isDisabled ? Color.secondary : Color.primary)
-                Spacer()
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .contentShape(Rectangle())
-            .background(
-                RoundedRectangle(cornerRadius: 4)
-                    .fill(isHovered && !isDisabled ? Color.accentColor : .clear)
-            )
-            .foregroundStyle(isHovered && !isDisabled ? Color.white : Color.primary)
-        }
-        .buttonStyle(.plain)
-        .disabled(isDisabled)
-        .onHover { isHovered = $0 }
-        .padding(.horizontal, 6)
-    }
-}
-
-private struct MenuToggleRow: View {
-    let title: String
-    let isOn: Bool
-    var isDisabled: Bool = false
-    let action: () -> Void
-
-    @State private var isHovered = false
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 6) {
-                Image(systemName: "checkmark")
-                    .font(.system(size: 11, weight: .bold))
-                    .opacity(isOn ? 1 : 0)
-                    .frame(width: 12)
-                Text(title)
-                Spacer()
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .contentShape(Rectangle())
-            .background(
-                RoundedRectangle(cornerRadius: 4)
-                    .fill(isHovered && !isDisabled ? Color.accentColor : .clear)
-            )
-            .foregroundStyle(
-                isDisabled
-                    ? Color.secondary
-                    : (isHovered ? Color.white : Color.primary)
-            )
-        }
-        .buttonStyle(.plain)
-        .disabled(isDisabled)
-        .onHover { isHovered = $0 }
-        .padding(.horizontal, 6)
-    }
-}
-
-private struct MenuDivider: View {
-    var body: some View {
         Divider()
-            .padding(.vertical, 4)
-            .padding(.horizontal, 10)
+
+        Button("Открыть Ushi") { openMainWindow() }
+        Button("Выйти") { NSApp.terminate(nil) }
     }
+
+    private func openMainWindow() {
+        openWindow(id: "main")
+        NSApp.activate(ignoringOtherApps: true)
+    }
+}
+
+/// Иконка в строке меню: во время записи рядом тикает таймер (§6.9).
+struct UshiMenuBarLabel: View {
+    let controller: RecordingController
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(controller.isRecording ? "MenuBarWaveform" : "MenuBarWaveformNext")
+                .renderingMode(.template)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 18, height: 18)
+            if controller.isRecording {
+                Text(formatTime(controller.recorder.elapsed))
+                    .monospacedDigit()
+            }
+        }
+        .accessibilityLabel(controller.isRecording ? "Ushi Next, идёт запись" : "Ushi Next")
+    }
+}
+
+private func formatTime(_ t: TimeInterval) -> String {
+    let total = Int(t)
+    let h = total / 3600
+    let m = (total % 3600) / 60
+    let s = total % 60
+    return h > 0 ? String(format: "%d:%02d:%02d", h, m, s) : String(format: "%02d:%02d", m, s)
 }

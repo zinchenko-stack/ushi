@@ -69,12 +69,7 @@ struct ushiApp: App {
         MenuBarExtra {
             UshiMenuBarView(recordingController: recordingController)
         } label: {
-            Image("MenuBarWaveformNext")
-                .renderingMode(.template)
-                .resizable()
-                .scaledToFit()
-                .frame(width: 20, height: 20)
-                .accessibilityLabel("Ushi Next")
+            UshiMenuBarLabel(controller: recordingController)
         }
         .menuBarExtraStyle(.menu)
     }
