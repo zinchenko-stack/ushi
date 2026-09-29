@@ -18,6 +18,7 @@ BG_PNG="$ASSETS_DIR/dmg-background.png"
 BG_PNG_2X="$ASSETS_DIR/dmg-background@2x.png"
 BG_TIFF="$RELEASE_DIR/dmg-background.tiff"
 
+# XCODEBUILD_EXTRA_ARGS / CREATE_DMG_EXTRA_ARGS — доп. аргументы (используются в CI).
 for tool in create-dmg rsvg-convert; do
   if ! command -v "$tool" >/dev/null 2>&1; then
     echo "Missing '$tool'. Install: brew install create-dmg librsvg"
@@ -33,7 +34,8 @@ xcodebuild \
   -scheme "$SCHEME" \
   -configuration "$CONFIGURATION" \
   -derivedDataPath "$DERIVED_DATA_DIR" \
-  build
+  build \
+  ${=XCODEBUILD_EXTRA_ARGS:-}
 
 if [[ ! -d "$APP_PATH" ]]; then
   echo "App not found at $APP_PATH"
@@ -70,6 +72,7 @@ create-dmg \
   --hide-extension "$APP_NAME.app" \
   --app-drop-link 480 200 \
   --no-internet-enable \
+  ${=CREATE_DMG_EXTRA_ARGS:-} \
   "$DMG_PATH" \
   "$APP_PATH"
 

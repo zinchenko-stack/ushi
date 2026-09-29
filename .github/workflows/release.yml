@@ -1,0 +1,79 @@
+# Автосборка релиза.
+# На каждый пуш в main смотрит MARKETING_VERSION в проекте: если релиза
+# v<версия> ещё нет — собирает whisper-cli, ushi.app, DMG/ZIP и публикует
+# GitHub Release. Приложение само увидит его через UpdateChecker
+# (releases/latest/download/latest-mac.json).
+# Чтобы выпустить обновление: поднять MARKETING_VERSION и влить в main.
+
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: macos-15
+    timeout-minutes: 60
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Версия и проверка, нужен ли релиз
+        id: version
+        run: |
+          VERSION=$(grep -m1 'MARKETING_VERSION = ' ushi.xcodeproj/project.pbxproj | sed -E 's/.*= ([^;]+);.*/\1/')
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if gh release view "v$VERSION" >/dev/null 2>&1; then
+            echo "Релиз v$VERSION уже есть — пропускаю."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Собираю v$VERSION."
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Сабмодули
+        if: steps.version.outputs.skip == 'false'
+        run: git submodule update --init --recursive --depth 1
+
+      - name: Инструменты
+        if: steps.version.outputs.skip == 'false'
+        run: |
+          brew install create-dmg librsvg
+          command -v cmake || brew install cmake
+          XCODE=$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)
+          echo "Xcode: $XCODE"
+          sudo xcode-select -s "$XCODE"
+          xcodebuild -version
+
+      - name: whisper-cli
+        if: steps.version.outputs.skip == 'false'
+        run: zsh scripts/build-whisper.sh
+
+      - name: ushi.app + DMG
+        if: steps.version.outputs.skip == 'false'
+        env:
+          RELEASE_BASE_URL: https://github.com/${{ github.repository }}/releases/download/v${{ steps.version.outputs.version }}
+          # На раннере нет сертификатов: собираем без подписи, скрипт потом подписывает ad-hoc.
+          XCODEBUILD_EXTRA_ARGS: CODE_SIGNING_ALLOWED=NO CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=
+          # Без GUI-сессии Finder не расставит иконки — пропускаем эту косметику.
+          CREATE_DMG_EXTRA_ARGS: --skip-jenkins
+        run: zsh scripts/build-release-dmg.sh
+
+      - name: Публикация релиза
+        if: steps.version.outputs.skip == 'false'
+        run: |
+          V=${{ steps.version.outputs.version }}
+          gh release create "v$V" \
+            release/build/ushi.dmg release/build/ushi.zip release/build/latest-mac.json \
+            --target "$GITHUB_SHA" --title "Ushi $V" --latest \
+            --notes "Автосборка из $GITHUB_SHA."
