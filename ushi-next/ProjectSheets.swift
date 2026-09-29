@@ -16,7 +16,7 @@ struct CreateProjectSheet: View {
 
     @Environment(\.dismiss) private var dismiss
     @State private var name = ""
-    @State private var preset: RecordingPreset = RecordingPreset.default.resolvedForThisMac
+    @State private var preset: RecordingPreset = AppState.mostRecentPreset()
     /// Выбранная папка для external-Проекта. nil — «Создать в Ushi» (managed).
     @State private var folder: URL?
     @State private var errorMessage: String?

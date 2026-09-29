@@ -16,62 +16,59 @@ struct SidebarView: View {
     private var controller: RecordingController { model.controller }
 
     var body: some View {
-        List(selection: $selection) {
-            // Обычный пункт меню, а не отдельная кнопка: ведёт на hero-экран,
-            // где стартует запись. Во время записи показывает таймер.
-            NewRecordingRow(controller: controller)
-                .tag(MainSelection.home)
-
-            // Phase 4 заменит на глобальный поиск; пока ведёт в список всех записей
-            // с поиском по названию и тексту, чтобы не потерять старую функцию.
-            Label("Поиск", systemImage: "magnifyingglass")
-                .tag(MainSelection.search)
-
-            Section {
-                if model.pinnedAndSortedProjects.isEmpty {
-                    Button {
-                        model.startCreatingProject()
-                    } label: {
-                        Label("Создать проект", systemImage: "plus")
-                            .foregroundStyle(.secondary)
-                    }
-                    .buttonStyle(.plain)
-                }
-                ForEach(model.pinnedAndSortedProjects) { project in
-                    projectGroup(project)
-                }
-            } header: {
-                HStack {
-                    Text("Проекты")
-                    Spacer()
-                    Button {
-                        model.startCreatingProject()
-                    } label: {
-                        Image(systemName: "plus")
-                    }
-                    .buttonStyle(.plain)
-                    .help("Новый проект")
-                }
-            }
-
-            Section("Записи", isExpanded: $model.isInboxExpanded) {
-                recordingRows(in: nil)
-            }
-        }
-        .listStyle(.sidebar)
-        .navigationTitle("Ushi")
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            // Настройки прижаты к низу, селекшн делит общий $selection с верхним списком.
+        VStack(spacing: 0) {
             List(selection: $selection) {
-                SidebarAssetRow(title: "Настройки", imageName: "Bolt")
-                    .tag(MainSelection.settings)
+                // Обычный пункт меню, а не отдельная кнопка: ведёт на hero-экран,
+                // где стартует запись. Во время записи показывает таймер.
+                NewRecordingRow(controller: controller)
+                    .tag(MainSelection.home)
+
+                // Phase 4 заменит на глобальный поиск; пока ведёт в список всех записей
+                // с поиском по названию и тексту, чтобы не потерять старую функцию.
+                Label("Поиск", systemImage: "magnifyingglass")
+                    .tag(MainSelection.search)
+
+                Section {
+                    if model.pinnedAndSortedProjects.isEmpty {
+                        Button {
+                            model.startCreatingProject()
+                        } label: {
+                            Label("Создать проект", systemImage: "plus")
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    ForEach(model.pinnedAndSortedProjects) { project in
+                        projectGroup(project)
+                    }
+                } header: {
+                    HStack {
+                        Text("Проекты")
+                        Spacer()
+                        Button {
+                            model.startCreatingProject()
+                        } label: {
+                            Image(systemName: "plus")
+                        }
+                        .buttonStyle(.plain)
+                        .help("Новый проект")
+                    }
+                }
+
+                Section("Записи", isExpanded: $model.isInboxExpanded) {
+                    recordingRows(in: nil)
+                }
             }
             .listStyle(.sidebar)
-            .scrollDisabled(true)
-            .frame(height: 44)
-            .background(Color(nsColor: .windowBackgroundColor))
-            .overlay(alignment: .top) { Divider() }
+            // Список обрезается ровно над «Настройками» — строки не наезжают на плашку.
+            .clipped()
+
+            // Настройки прижаты к низу: тот же фон sidebar, без разделителя.
+            SettingsFooterRow(isSelected: selection == .settings) {
+                selection = .settings
+            }
         }
+        .navigationTitle("Ushi")
         .sheet(isPresented: $model.isCreatingProject) {
             CreateProjectSheet(projects: controller.projects) { project in
                 model.didCreateProject(project)
@@ -467,4 +464,30 @@ private func formatTime(_ t: TimeInterval) -> String {
 private struct IdentifiedMove: Identifiable {
     let progress: MoveProgress
     var id: UUID { progress.recordingID }
+}
+
+// MARK: - Плашка «Настройки» внизу
+
+/// Строка «Настройки», закреплённая под списком. Фон не свой — тот же материал
+/// sidebar, поэтому цвет не отличается; выделение как у строк списка.
+private struct SettingsFooterRow: View {
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            SidebarAssetRow(title: "Настройки", imageName: "Bolt")
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(isSelected ? Color.primary.opacity(0.1) : Color.clear)
+                )
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+    }
 }

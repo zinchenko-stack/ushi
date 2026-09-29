@@ -49,4 +49,19 @@ enum AppState {
     static func setLastUsedPreset(_ preset: RecordingPreset) {
         try? AppDatabase.shared.write { try setLastUsedPreset(preset, in: $0) }
     }
+
+    /// Пресет самой свежей Записи — с Проектом или без. Им по умолчанию
+    /// заполняется окно «Новый проект»: предлагаем то, что писали в прошлый раз.
+    static func mostRecentPreset() -> RecordingPreset {
+        let raw = try? AppDatabase.shared.read { db in
+            try String.fetchOne(
+                db,
+                sql: "SELECT preset_snapshot FROM recording ORDER BY created_at DESC LIMIT 1"
+            )
+        }
+        guard let raw = raw ?? nil, let preset = RecordingPreset(rawValue: raw) else {
+            return lastUsedPreset()
+        }
+        return preset.resolvedForThisMac
+    }
 }
