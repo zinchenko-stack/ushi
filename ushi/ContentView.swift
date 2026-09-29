@@ -7,8 +7,7 @@ import SwiftUI
 import AppKit
 
 struct ContentView: View {
-    @State private var store = RecordingsStore()
-    @State private var recorder = AudioRecorder()
+    let recordingController: RecordingController
     @State private var selection: SidebarSection? = .recording
     @State private var hasScreenAccess = ScreenRecordingPermission.isGranted
     @State private var path: [Recording] = []
@@ -54,7 +53,7 @@ struct ContentView: View {
         }
         .task(id: modelManager.isReady) {
             guard modelManager.isReady else { return }
-            await store.processPendingTranscriptions()
+            await recordingController.store.processPendingTranscriptions()
         }
     }
 
@@ -94,17 +93,17 @@ struct ContentView: View {
                 Group {
                     switch selection ?? .recording {
                     case .recording:
-                        RecordingView(recorder: recorder, store: store) { rec in
+                        RecordingView(recordingController: recordingController) { rec in
                             path.append(rec)
                         }
                     case .history:
-                        HistoryView(store: store)
+                        HistoryView(store: recordingController.store)
                     case .settings:
                         SettingsView()
                     }
                 }
                 .navigationDestination(for: Recording.self) { rec in
-                    RecordingDetailView(recording: rec, store: store)
+                    RecordingDetailView(recording: rec, store: recordingController.store)
                 }
             }
             .frame(minWidth: 680, maxWidth: .infinity, maxHeight: .infinity)
@@ -115,7 +114,7 @@ struct ContentView: View {
 }
 
 #Preview {
-    ContentView()
+    ContentView(recordingController: RecordingController())
         .frame(width: 900, height: 600)
         .environment(UpdateChecker())
         .environment(ModelManager.shared)

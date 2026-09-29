@@ -6,3 +6,4 @@ release/build/
 .DS_Store
 .build/
 ushi-next-tests/.build/
+xcuserdata/

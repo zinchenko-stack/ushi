@@ -6,13 +6,10 @@
 import SwiftUI
 
 struct RecordingView: View {
-    @Bindable var recorder: AudioRecorder
-    @Bindable var store: RecordingsStore
+    @Bindable var recordingController: RecordingController
     /// Открыть запись по тапу на тост «Запись сохранена».
     var onOpenRecording: (Recording) -> Void
 
-    @State private var isWorking = false   // блокируем кнопку, пока async start/stop
-    @State private var errorMessage: String?
     @State private var activeTask: Task<Void, Never>?
 
     @State private var savedRecording: Recording?     // показанный тост (nil = скрыт)
@@ -23,6 +20,7 @@ struct RecordingView: View {
     @State private var countdown: Int?
     @State private var countdownTask: Task<Void, Never>?
     private let countdownStart = 3
+    private var recorder: AudioRecorder { recordingController.recorder }
 
     var body: some View {
         VStack(spacing: 32) {
@@ -50,10 +48,10 @@ struct RecordingView: View {
                         .frame(width: 120, height: 120)
                     buttonGlyph
                 }
-                .opacity(isWorking ? 0.5 : 1)
+                .opacity(recordingController.isBusy ? 0.5 : 1)
             }
             .buttonStyle(.plain)
-            .disabled(isWorking)
+            .disabled(recordingController.isBusy)
 
             Text(statusText)
                 .font(.title3)
@@ -90,7 +88,7 @@ struct RecordingView: View {
                 ) { recorder.captureVideo.toggle() }
             }
 
-            if let errorMessage {
+            if let errorMessage = recordingController.errorMessage {
                 Text(errorMessage)
                     .font(.callout)
                     .foregroundStyle(.red)
@@ -154,7 +152,7 @@ struct RecordingView: View {
     }
 
     private var statusText: String {
-        if isWorking { return "Подождите…" }
+        if recordingController.isBusy { return "Подождите…" }
         if countdown != nil { return "Нажмите, чтобы отменить" }
         return recorder.isRecording ? "Идёт запись…" : "Нажмите, чтобы начать"
     }
@@ -223,7 +221,7 @@ struct RecordingView: View {
     }
 
     private func handleTap() {
-        guard !isWorking else { return }
+        guard !recordingController.isBusy else { return }
 
         // Идёт обратный отсчёт → отменяем и выходим, ничего не запуская.
         if countdown != nil {
@@ -244,7 +242,7 @@ struct RecordingView: View {
         }
 
         // Иначе — начинаем с обратного отсчёта.
-        errorMessage = nil
+        recordingController.dismissError()
         countdownTask = Task { await runCountdownThenStart() }
     }
 
@@ -265,24 +263,13 @@ struct RecordingView: View {
         countdown = nil
         countdownTask = nil
 
-        isWorking = true
-        defer { isWorking = false }
-        do {
-            try await recorder.start()
-        } catch {
-            errorMessage = error.localizedDescription
-        }
+        await recordingController.startCurrentConfiguration()
     }
 
     private func stopRecording() async {
-        isWorking = true
-        defer { isWorking = false }
-        do {
-            let result = try await recorder.stop()
-            let rec = store.addRecording(audioURL: result.url, duration: result.duration)
+        await recordingController.stop(alertOnFailure: false)
+        if let rec = recordingController.consumeLastSavedRecording() {
             showSavedToast(rec)
-        } catch {
-            errorMessage = error.localizedDescription
         }
     }
 
