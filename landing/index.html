@@ -16,10 +16,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="preconnect" href="https://api.fontshare.com" crossorigin>
-  <link rel="preconnect" href="https://cdn.fontshare.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500&display=swap" rel="stylesheet">
-  <link href="https://api.fontshare.com/v2/css?f[]=clash-display@500,600,700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500&family=Unbounded:wght@400;500&display=swap" rel="stylesheet">
   <style>
     :root {
       --bg: #f6f5f4;
@@ -46,28 +43,32 @@
 
     body {
       display: flex;
+      flex-direction: column;
       align-items: center;
       justify-content: center;
+      width: 100%;
       min-height: 100vh;
       padding: 40px 24px;
     }
 
     main {
       display: flex;
+      flex: 1 0 auto;
       flex-direction: column;
       align-items: center;
+      justify-content: center;
       width: 100%;
       max-width: 944px;
-      gap: 20px;
+      gap: 40px;
     }
 
     .pill {
       background: var(--container-primary);
-      border-radius: 24px;
-      padding: 4px 16px 4px 12px;
+      border-radius: 20px;
+      padding: 6px 16px 6px 6px;
       display: inline-flex;
       align-items: center;
-      gap: 12px;
+      gap: 10px;
     }
 
     .pill .logo-square {
@@ -88,22 +89,20 @@
     }
 
     .pill .brand {
-      font-family: "Clash Display", "Onest", sans-serif;
+      font-family: "Unbounded", sans-serif;
       font-weight: 500;
-      font-size: 28px;
-      line-height: 40px;
+      font-size: 16px;
+      line-height: 1;
       color: var(--element-accent);
-      letter-spacing: -1.5px;
     }
 
     h1 {
-      font-family: "Onest", sans-serif;
-      font-weight: 500;
-      font-size: 56px;
-      line-height: 60px;
+      font-family: "Unbounded", sans-serif;
+      font-weight: 400;
+      font-size: 52px;
+      line-height: 68px;
       letter-spacing: 0;
       text-align: center;
-      padding-top: 20px;
       max-width: 800px;
     }
 
@@ -126,7 +125,6 @@
       color: var(--element-primary);
       text-align: center;
       max-width: 520px;
-      margin-top: 20px;
     }
 
     .action {
@@ -134,24 +132,25 @@
       flex-direction: column;
       align-items: center;
       gap: 12px;
-      margin-top: 28px;
       padding-top: 8px;
     }
 
     .cta {
       display: inline-flex;
       align-items: center;
-      gap: 8px;
+      justify-content: center;
+      gap: 12px;
       background: var(--element-accent);
       color: var(--element-inverse);
       text-decoration: none;
-      padding: 10px 24px;
+      min-height: 48px;
+      padding: 12px 40px;
       border-radius: 16px;
       font-family: "Onest", sans-serif;
       font-weight: 500;
-      font-size: 15px;
-      line-height: 22px;
-      letter-spacing: -0.3px;
+      font-size: 17px;
+      line-height: 24px;
+      letter-spacing: -0.34px;
       transition: background 0.15s ease, transform 0.15s ease;
     }
 
@@ -164,9 +163,10 @@
     }
 
     .cta .apple-icon {
-      width: 14px;
-      height: 17px;
+      width: 16px;
+      height: 20px;
       display: block;
+      flex-shrink: 0;
     }
 
     .caption {
@@ -201,32 +201,46 @@
       }
     }
 
-    /* Mobile */
     @media (max-width: 640px) {
       body {
-        padding: 24px 20px;
+        padding: 28px 16px;
+      }
+      main {
+        gap: 28px;
+      }
+      .pill {
+        border-radius: 16px;
+        padding-right: 12px;
       }
       h1 {
-        font-size: 36px;
+        font-size: 32px;
         line-height: 40px;
-        letter-spacing: 0;
       }
       .pill .brand {
-        font-size: 24px;
-        line-height: 32px;
+        font-size: 16px;
       }
       .pill .logo-square {
-        width: 36px;
-        height: 36px;
-        border-radius: 10px;
-      }
-      .pill .logo-square svg {
-        width: 18px;
-        height: 18px;
+        border-radius: 12px;
       }
       .lead {
-        font-size: 16px;
+        font-size: 17px;
         line-height: 26px;
+        letter-spacing: -0.34px;
+      }
+      .action {
+        gap: 18px;
+      }
+      .cta {
+        gap: 10px;
+        padding: 12px 24px;
+        font-size: 16px;
+        line-height: 22px;
+        letter-spacing: -0.32px;
+      }
+      .caption {
+        font-size: 13px;
+        line-height: 18px;
+        letter-spacing: -0.13px;
       }
     }
   </style>
@@ -250,15 +264,48 @@
 
     <p class="lead">Приложение, которое записывает звук и экран для важного, и превращает это в текст с удобным поиском.</p>
 
-    <div class="action">
-      <a class="cta" href="https://github.com/zinchenko-stack/ushi/releases/latest/download/ushi.dmg">
-        <svg class="apple-icon" viewBox="0 0 13.838 17" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-          <path d="M13.3977 5.7953C13.2991 5.8718 11.5583 6.8527 11.5583 9.0338C11.5583 11.5566 13.7734 12.4491 13.8397 12.4712C13.8295 12.5256 13.4878 13.6935 12.6718 14.8835C11.9442 15.9307 11.1843 16.9762 10.0283 16.9762C8.8723 16.9762 8.5748 16.3047 7.2403 16.3047C5.9398 16.3047 5.4774 16.9983 4.42 16.9983C3.3626 16.9983 2.6248 16.0293 1.7765 14.8393C0.7939 13.4419 0 11.271 0 9.2106C0 5.9058 2.1488 4.1531 4.2636 4.1531C5.3873 4.1531 6.324 4.8909 7.0295 4.8909C7.701 4.8909 8.7482 4.1089 10.0266 4.1089C10.5111 4.1089 12.2519 4.1531 13.3977 5.7953ZM9.4197 2.7098C9.9484 2.0825 10.3224 1.2121 10.3224 0.3417C10.3224 0.221 10.3122 0.0986 10.2901 0C9.4299 0.0323 8.4065 0.5729 7.7894 1.2886C7.3049 1.8394 6.8527 2.7098 6.8527 3.5921C6.8527 3.7247 6.8748 3.8573 6.885 3.8998C6.9394 3.91 7.0278 3.9219 7.1162 3.9219C7.888 3.9219 8.8587 3.4051 9.4197 2.7098Z" fill="white"/>
-        </svg>
-        <span>Скачать на Mac</span>
-      </a>
-      <p class="caption">Доступно только с MacOS</p>
+    <div class="action" id="action">
+      <!-- populated by platform-detect script below -->
     </div>
   </main>
+  <script>
+    (function () {
+      var ua = navigator.userAgent;
+      var isMac = false, isWindows = false;
+
+      if (navigator.userAgentData) {
+        var p = (navigator.userAgentData.platform || '').toLowerCase();
+        isMac = p === 'macos';
+        isWindows = p === 'windows';
+      }
+      if (!isMac && !isWindows) {
+        var plt = navigator.platform || '';
+        isMac = /Mac/.test(plt) && !/iPhone|iPad/.test(ua);
+        isWindows = /Win/.test(plt) || /Windows/.test(ua);
+      }
+
+      var action = document.getElementById('action');
+
+      var appleIconSvg = '<svg class="apple-icon" viewBox="0 0 13.838 17" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M13.3977 5.7953C13.2991 5.8718 11.5583 6.8527 11.5583 9.0338C11.5583 11.5566 13.7734 12.4491 13.8397 12.4712C13.8295 12.5256 13.4878 13.6935 12.6718 14.8835C11.9442 15.9307 11.1843 16.9762 10.0283 16.9762C8.8723 16.9762 8.5748 16.3047 7.2403 16.3047C5.9398 16.3047 5.4774 16.9983 4.42 16.9983C3.3626 16.9983 2.6248 16.0293 1.7765 14.8393C0.7939 13.4419 0 11.271 0 9.2106C0 5.9058 2.1488 4.1531 4.2636 4.1531C5.3873 4.1531 6.324 4.8909 7.0295 4.8909C7.701 4.8909 8.7482 4.1089 10.0266 4.1089C10.5111 4.1089 12.2519 4.1531 13.3977 5.7953ZM9.4197 2.7098C9.9484 2.0825 10.3224 1.2121 10.3224 0.3417C10.3224 0.221 10.3122 0.0986 10.2901 0C9.4299 0.0323 8.4065 0.5729 7.7894 1.2886C7.3049 1.8394 6.8527 2.7098 6.8527 3.5921C6.8527 3.7247 6.8748 3.8573 6.885 3.8998C6.9394 3.91 7.0278 3.9219 7.1162 3.9219C7.888 3.9219 8.8587 3.4051 9.4197 2.7098Z" fill="white"/></svg>';
+
+      var winIconSvg = '<svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M0 1.916L5.733 1.1v5.55H0V1.916zm0 10.168L5.733 12.9V7.42H0v4.664zm6.267-11.03L14 0v6.65H6.267V1.054zm0 11.946V7.42H14V14l-7.733-1z" fill="currentColor"/></svg>';
+
+      if (isWindows) {
+        action.innerHTML =
+          '<span class="cta-soon">' +
+            winIconSvg +
+            '<span>Скоро на Windows</span>' +
+          '</span>' +
+          '<p class="caption">Пока доступно только на Mac</p>';
+      } else {
+        action.innerHTML =
+          '<a class="cta" href="https://github.com/zinchenko-stack/ushi/releases/latest/download/ushi.dmg">' +
+            appleIconSvg +
+            '<span>Скачать на Mac</span>' +
+          '</a>' +
+          '<p class="caption">Бесплатно · macOS 14+</p>';
+      }
+    })();
+  </script>
 </body>
 </html>
