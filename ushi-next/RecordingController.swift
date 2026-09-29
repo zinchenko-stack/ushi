@@ -106,7 +106,7 @@ final class RecordingController {
         defer { isBusy = false }
 
         do {
-            configureRecorder(for: preset, project: project)
+            try configureRecorder(for: preset, project: project)
             try await ensurePermissionsForCurrentConfiguration()
             try await recorder.start()
             errorMessage = nil
@@ -179,12 +179,19 @@ final class RecordingController {
 
     // MARK: - Конфигурация
 
-    private func configureRecorder(for preset: RecordingPreset, project: Project?) {
+    /// Бросает `ProjectFolderError.unavailable`, если папка external-Проекта пропала:
+    /// лучше не начать запись, чем молча положить её не туда (§10 Phase 3, п. 6).
+    private func configureRecorder(for preset: RecordingPreset, project: Project?) throws {
         guard !recorder.isRecording else { return }
+        do {
+            recorder.outputDirectory = try project.map { try ProjectFolders.recordingsDirectory(for: $0) }
+        } catch {
+            projects.refreshFolders()
+            throw error
+        }
         recorder.micEnabled = preset.hasMicrophone
         recorder.systemAudioEnabled = preset.hasSystemAudio
         recorder.captureVideo = preset.hasScreen
-        recorder.outputDirectory = project.flatMap { try? AppSettings.recordingsDirectory(for: $0) }
     }
 
     private func ensurePermissionsForCurrentConfiguration() async throws {

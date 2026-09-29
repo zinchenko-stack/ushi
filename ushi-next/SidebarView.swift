@@ -84,6 +84,18 @@ struct SidebarView: View {
                 model.deleteProject(project, deleteRecordings: deleteRecordings)
             }
         }
+        .sheet(item: Binding(
+            get: { controller.store.activeMove.map(IdentifiedMove.init) },
+            set: { _ in }
+        )) { move in
+            MoveProgressSheet(progress: move.progress) {
+                controller.store.cancelMove()
+            }
+        }
+        // Юзер мог удалить или переименовать папку проекта в Finder — перепроверяем.
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            controller.projects.refreshFolders()
+        }
         .confirmationDialog(
             "Удалить запись?",
             isPresented: Binding(
@@ -123,9 +135,12 @@ struct SidebarView: View {
         } label: {
             ProjectRow(
                 project: project,
+                isAvailable: model.isAvailable(project),
+                folderPath: model.folderPath(of: project),
                 isRenaming: model.renamingProjectID == project.id,
                 isRecordingHere: controller.isRecording && controller.activeProjectID == project.id,
-                canStart: !controller.isRecording && !controller.isBusy && !controller.isCountingDown,
+                canStart: model.isAvailable(project)
+                    && !controller.isRecording && !controller.isBusy && !controller.isCountingDown,
                 onStart: {
                     selection = .home
                     Task { await controller.startInProject(project) }
@@ -141,6 +156,12 @@ struct SidebarView: View {
 
     @ViewBuilder
     private func projectMenu(_ project: Project) -> some View {
+        if !model.isAvailable(project) {
+            Button("Подключить заново…") {
+                model.reconnect(project)
+            }
+            Divider()
+        }
         Button(project.isPinned ? "Открепить" : "Закрепить") {
             model.togglePinned(project)
         }
@@ -268,6 +289,10 @@ extension Binding where Value == RecordingPreset {
 
 private struct ProjectRow<MenuContent: View>: View {
     let project: Project
+    /// false — папка external-Проекта пропала (degraded state, §7.6).
+    let isAvailable: Bool
+    /// Путь своей папки — в подсказке при наведении. nil — папка внутри Ushi.
+    let folderPath: String?
     let isRenaming: Bool
     let isRecordingHere: Bool
     let canStart: Bool
@@ -278,10 +303,29 @@ private struct ProjectRow<MenuContent: View>: View {
 
     @State private var isHovered = false
 
+    private var iconName: String {
+        if isRecordingHere { return "record.circle.fill" }
+        if !isAvailable { return "exclamationmark.triangle.fill" }
+        return folderPath == nil ? "folder" : "folder.badge.person.crop"
+    }
+
+    private var iconColor: Color {
+        if isRecordingHere { return .red }
+        if !isAvailable { return .yellow }
+        return .secondary
+    }
+
+    private var helpText: String {
+        if !isAvailable {
+            return "Папка проекта недоступна. Правый клик → «Подключить заново…»"
+        }
+        return folderPath.map { "Папка: \($0)" } ?? project.name
+    }
+
     var body: some View {
         HStack(spacing: 6) {
-            Image(systemName: isRecordingHere ? "record.circle.fill" : "folder")
-                .foregroundStyle(isRecordingHere ? Color.red : Color.secondary)
+            Image(systemName: iconName)
+                .foregroundStyle(iconColor)
                 .frame(width: 16)
 
             if isRenaming {
@@ -289,6 +333,7 @@ private struct ProjectRow<MenuContent: View>: View {
             } else {
                 Text(project.name)
                     .lineLimit(1)
+                    .foregroundStyle(isAvailable ? Color.primary : Color.secondary)
                 if project.isPinned {
                     Image(systemName: "pin.fill")
                         .font(.caption2)
@@ -319,6 +364,7 @@ private struct ProjectRow<MenuContent: View>: View {
         }
         .contentShape(Rectangle())
         .onHover { isHovered = $0 }
+        .help(helpText)
     }
 }
 
@@ -404,4 +450,11 @@ private func formatTime(_ t: TimeInterval) -> String {
     return h > 0
         ? String(format: "%d:%02d:%02d", h, m, s)
         : String(format: "%02d:%02d", m, s)
+}
+
+/// Обёртка для `.sheet(item:)`: id стабилен, пока меняется процент,
+/// иначе SwiftUI пересоздавал бы окно на каждом шаге прогресса.
+private struct IdentifiedMove: Identifiable {
+    let progress: MoveProgress
+    var id: UUID { progress.recordingID }
 }

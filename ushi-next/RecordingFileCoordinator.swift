@@ -14,12 +14,6 @@ struct RenameResult {
     let transcriptBookmark: Data?
 }
 
-struct MoveResult {
-    let audioFileName: String
-    let storageFolderPath: String
-    let audioBookmark: Data?
-}
-
 final class RecordingFileCoordinator {
     func deleteFiles(for recording: Recording) {
         let fm = FileManager.default
@@ -101,51 +95,6 @@ final class RecordingFileCoordinator {
             audioBookmark: audioBookmark,
             transcriptFileName: transcriptFileName,
             transcriptBookmark: transcriptBookmark
-        )
-    }
-
-    /// Переносит медиафайл записи в другую папку (Move to между Проектами, §7.4 брифа).
-    /// Транскрипт не трогает — он живёт в служебной `transcripts/`, общей для всех.
-    /// Если медиа уже нет (удалено по сроку или пропало) — возвращает запись как есть
-    /// с новой папкой, чтобы следующие записи/резолверы смотрели в правильное место.
-    /// Бросает ошибку только при реальном сбое moveItem — тогда вызывающий
-    /// не должен менять projectId (запись остаётся в исходном Проекте).
-    func moveMedia(of recording: Recording, to targetDir: URL) throws -> MoveResult {
-        let fm = FileManager.default
-        try fm.createDirectory(at: targetDir, withIntermediateDirectories: true)
-
-        guard !recording.audioRemoved,
-              !recording.audioFileName.isEmpty,
-              let (source, _) = recording.resolveAudioURL() else {
-            return MoveResult(
-                audioFileName: recording.audioFileName,
-                storageFolderPath: targetDir.path,
-                audioBookmark: nil
-            )
-        }
-
-        if source.deletingLastPathComponent().standardizedFileURL == targetDir.standardizedFileURL {
-            return MoveResult(
-                audioFileName: source.lastPathComponent,
-                storageFolderPath: targetDir.path,
-                audioBookmark: FileBookmark.create(from: source)
-            )
-        }
-
-        let ext = source.pathExtension
-        let base = source.deletingPathExtension().lastPathComponent
-        var destination = targetDir.appendingPathComponent(source.lastPathComponent)
-        var n = 2
-        while fm.fileExists(atPath: destination.path), n < 1000 {
-            destination = targetDir.appendingPathComponent("\(base) (\(n)).\(ext)")
-            n += 1
-        }
-
-        try fm.moveItem(at: source, to: destination)
-        return MoveResult(
-            audioFileName: destination.lastPathComponent,
-            storageFolderPath: targetDir.path,
-            audioBookmark: FileBookmark.create(from: destination)
         )
     }
 

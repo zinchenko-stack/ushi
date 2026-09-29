@@ -249,13 +249,6 @@ enum AppSettings {
             .appendingPathComponent(projectId.uuidString, isDirectory: true)
     }
 
-    /// Куда физически пишутся записи Проекта (или orphan-Записи при `project == nil`).
-    /// Phase 2: только managed. External-Проекты — Phase 3.
-    static func recordingsDirectory(for project: Project?) throws -> URL {
-        guard let project else { return try recordingsDirectory() }
-        return try projectRecordingsDirectory(projectId: project.id)
-    }
-
     private static func resolvedRecordingsDirectory() -> URL? {
         guard let path = UserDefaults.standard.string(forKey: recordingsFolderPathKey),
               !path.isEmpty else {

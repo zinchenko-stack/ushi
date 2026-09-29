@@ -67,6 +67,18 @@ final class ProjectStore {
         }
     }
 
+    /// Сменить место хранения: «Подключить заново» или обновлённый bookmark/путь
+    /// после переименования внешней папки (Phase 3). updated_at не трогаем —
+    /// это не пользовательская активность, Проект не должен «всплывать».
+    func updateStorage(_ project: Project, _ storage: ProjectStorage) throws {
+        try dbQueue.write { db in
+            try db.execute(
+                sql: "UPDATE project SET storage_kind = ?, bookmark_data = ?, display_path = ? WHERE id = ?",
+                arguments: [storage.kindString, storage.bookmark, storage.displayPath, project.id.uuidString]
+            )
+        }
+    }
+
     func updateLastUsedPreset(_ project: Project, _ preset: RecordingPreset) throws {
         try dbQueue.write { db in
             try db.execute(

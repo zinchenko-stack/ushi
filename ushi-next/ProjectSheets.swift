@@ -2,7 +2,8 @@
 //  ProjectSheets.swift
 //  UshiNext
 //
-//  Модалки Проектов (Phase 2): создание (§6.5) и удаление (§6.8).
+//  Модалки Проектов: создание (§6.5, с Phase 3 — и в своей папке),
+//  удаление (§6.8), прогресс переноса между дисками (Phase 3).
 //
 
 import SwiftUI
@@ -15,7 +16,9 @@ struct CreateProjectSheet: View {
 
     @Environment(\.dismiss) private var dismiss
     @State private var name = ""
-    @State private var preset: RecordingPreset = RecordingPreset.systemAndMic.resolvedForThisMac
+    @State private var preset: RecordingPreset = RecordingPreset.default.resolvedForThisMac
+    /// Выбранная папка для external-Проекта. nil — «Создать в Ushi» (managed).
+    @State private var folder: URL?
     @State private var errorMessage: String?
     @FocusState private var nameFocused: Bool
 
@@ -52,14 +55,27 @@ struct CreateProjectSheet: View {
             VStack(alignment: .leading, spacing: 6) {
                 Text("Где хранить")
                     .font(.headline)
-                // External-папки — Phase 3. Пока только managed.
-                Picker("Где хранить", selection: .constant(0)) {
-                    Text("Создать в Ushi").tag(0)
-                    Text("Использовать существующую папку — скоро").tag(1)
-                        .disabled(true)
+                Picker("Где хранить", selection: storageChoice) {
+                    Text("Создать в Ushi").tag(false)
+                    Text("Использовать существующую папку").tag(true)
                 }
                 .pickerStyle(.radioGroup)
                 .labelsHidden()
+
+                if let folder {
+                    HStack(spacing: 6) {
+                        Image(systemName: "folder")
+                            .foregroundStyle(.secondary)
+                        Text(ProjectFolders.displayPath(folder.path))
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                            .foregroundStyle(.secondary)
+                        Button("Изменить…", action: pickFolder)
+                            .buttonStyle(.link)
+                    }
+                    .font(.callout)
+                    .padding(.leading, 20)
+                }
             }
 
             if let errorMessage {
@@ -82,10 +98,32 @@ struct CreateProjectSheet: View {
         .onAppear { nameFocused = true }
     }
 
+    /// Радио «Где хранить»: выбор «существующей папки» сразу открывает Finder;
+    /// если там нажали «Отмена» — остаёмся на «Создать в Ushi».
+    private var storageChoice: Binding<Bool> {
+        Binding(
+            get: { folder != nil },
+            set: { useFolder in
+                if useFolder {
+                    pickFolder()
+                } else {
+                    folder = nil
+                }
+            }
+        )
+    }
+
+    private func pickFolder() {
+        guard let picked = FolderPicker.chooseFolder(message: "Выберите папку, где будут лежать записи проекта") else { return }
+        folder = picked
+        // Имя по умолчанию — имя папки, если юзер ещё ничего не ввёл (§6.5).
+        if trimmedName.isEmpty { name = picked.lastPathComponent }
+    }
+
     private func create() {
         guard !trimmedName.isEmpty else { return }
         do {
-            let project = try projects.create(name: trimmedName, preset: preset)
+            let project = try projects.create(name: trimmedName, preset: preset, folder: folder)
             onCreated(project)
             dismiss()
         } catch {
@@ -134,7 +172,7 @@ struct DeleteProjectSheet: View {
 
                 Text(deleteRecordings
                      ? "Записи и их файлы будут удалены без возможности восстановления."
-                     : "Если оставить — записи переместятся в «Записи».")
+                     : keepText)
                     .font(.callout)
                     .foregroundStyle(deleteRecordings ? Color.red : Color.secondary)
 
@@ -164,6 +202,14 @@ struct DeleteProjectSheet: View {
         .frame(width: 420)
     }
 
+    /// Что будет с записями, если их не удалять. Папку external-Проекта не трогаем.
+    private var keepText: String {
+        guard let path = project.storage.displayPath else {
+            return "Если оставить — записи переместятся в «Записи»."
+        }
+        return "Если оставить — записи появятся в «Записях», а файлы останутся в папке \(ProjectFolders.displayPath(path))."
+    }
+
     private var summary: String {
         guard recordingCount > 0 else { return "В проекте нет записей." }
         return "В проекте \(recordingCount) \(Self.recordingsWord(recordingCount)) (\(sizeText))."
@@ -179,5 +225,36 @@ struct DeleteProjectSheet: View {
         case 2, 3, 4: return "записи"
         default: return "записей"
         }
+    }
+}
+
+// MARK: - Перенос между дисками
+
+/// Прогресс копирования записи на другой диск (Phase 3, п. 5). «Отменить» —
+/// частичная копия удаляется, запись остаётся на старом месте.
+struct MoveProgressSheet: View {
+    let progress: MoveProgress
+    var onCancel: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Переношу запись")
+                .font(.title3.weight(.semibold))
+            Text("«\(progress.recordingTitle)» → «\(progress.destinationName)»")
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+            ProgressView(value: progress.fraction)
+            HStack {
+                Text("\(Int((progress.fraction * 100).rounded()))%")
+                    .font(.callout.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button("Отменить", role: .cancel, action: onCancel)
+                    .keyboardShortcut(.cancelAction)
+            }
+        }
+        .padding(24)
+        .frame(width: 380)
+        .interactiveDismissDisabled()
     }
 }

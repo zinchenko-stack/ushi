@@ -62,47 +62,91 @@ final class RecordingsStore {
         recording.status != .transcribing
     }
 
+    /// Идущий сейчас перенос между дисками (для окна с прогрессом). nil — переноса нет
+    /// или он мгновенный (тот же диск).
+    private(set) var activeMove: MoveProgress?
+    @ObservationIgnored private var moveTask: Task<URL, Error>?
+
+    /// Отменить перенос: частичная копия удаляется, оригинал остаётся на месте.
+    func cancelMove() {
+        moveTask?.cancel()
+    }
+
     /// Move to (§7.4 брифа): файл физически переезжает в папку целевого Проекта,
-    /// затем меняется projectId. Если файл не удалось перенести — запись остаётся
-    /// в исходном Проекте, ошибка пробрасывается в UI.
-    func move(_ recording: Recording, to project: Project?) throws {
-        guard let idx = recordings.firstIndex(where: { $0.id == recording.id }) else { return }
-        let current = recordings[idx]
+    /// затем меняется projectId. На одном диске — мгновенно, между дисками —
+    /// копирование с прогрессом (`activeMove`). Если файл не удалось перенести
+    /// или перенос отменили — запись остаётся в исходном Проекте, ошибка
+    /// пробрасывается в UI.
+    func move(_ recording: Recording, to project: Project?) async throws {
+        guard let current = recordings.first(where: { $0.id == recording.id }) else { return }
         guard current.projectId != project?.id else { return }
         guard canMove(current) else { throw RecordingsStoreError.busyTranscribing }
+        guard moveTask == nil else { throw RecordingsStoreError.anotherMoveInProgress }
 
-        let targetDir = try AppSettings.recordingsDirectory(for: project)
-        let result = try fileCoordinator.moveMedia(of: current, to: targetDir)
+        let targetDir = try ProjectFolders.recordingsDirectory(for: project)
+        var moved = current
+        moved.projectId = project?.id
+        moved.storageFolderPath = targetDir.path
 
-        var rec = current
-        rec.projectId = project?.id
-        rec.audioFileName = result.audioFileName
-        rec.storageFolderPath = result.storageFolderPath
-        rec.audioBookmark = result.audioBookmark ?? rec.audioBookmark
+        if let source = mediaURL(for: current) {
+            if FileMover.needsCopy(from: source, toDirectory: targetDir) {
+                activeMove = MoveProgress(
+                    recordingID: current.id,
+                    recordingTitle: current.title,
+                    destinationName: project?.name ?? "Записи",
+                    fraction: 0
+                )
+            }
+            let task = Task { [weak self] in
+                try await FileMover().moveFile(at: source, toDirectory: targetDir) { fraction in
+                    Task { @MainActor in self?.activeMove?.fraction = fraction }
+                }
+            }
+            moveTask = task
+            defer {
+                moveTask = nil
+                activeMove = nil
+            }
+            let newURL = try await task.value
+            moved.audioFileName = newURL.lastPathComponent
+            moved.audioBookmark = FileBookmark.create(from: newURL) ?? moved.audioBookmark
+        }
+
+        // Пока шло копирование, массив мог поменяться — ищем запись заново.
+        guard let idx = recordings.firstIndex(where: { $0.id == recording.id }) else { return }
+        var rec = recordings[idx]
+        rec.projectId = moved.projectId
+        rec.storageFolderPath = moved.storageFolderPath
+        rec.audioFileName = moved.audioFileName
+        rec.audioBookmark = moved.audioBookmark
         recordings[idx] = rec
 
         if let project {
             // Проект «всплывает» в sidebar по recency (§6.2).
-            try? dbQueue.write { db in
+            let projectID = project.id.uuidString
+            try? await dbQueue.write { db in
                 try db.execute(
                     sql: "UPDATE project SET updated_at = ? WHERE id = ?",
-                    arguments: [Date(), project.id.uuidString]
+                    arguments: [Date(), projectID]
                 )
             }
         }
     }
 
     /// Готовит удаление Проекта (§6.8): либо удаляет его записи вместе с файлами,
-    /// либо переносит их в «Записи» (orphan) — и файлы тоже, потому что папка
-    /// Проекта будет удалена. Сразу пишет в БД, чтобы ON DELETE у project
-    /// не разошёлся с кэшем.
-    func detachRecordings(fromProject projectID: UUID, deleteFiles: Bool) {
+    /// либо переносит их в «Записи» (orphan). Файлы managed-Проекта переезжают
+    /// в «Записи», потому что его папка будет удалена; файлы external-Проекта
+    /// остаются в папке юзера — её мы не трогаем. Сразу пишет в БД, чтобы
+    /// ON DELETE у project не разошёлся с кэшем.
+    func detachRecordings(fromProject projectID: UUID, deleteFiles: Bool, moveFiles: Bool) async {
         for rec in recordings(inProject: projectID) {
             if deleteFiles {
                 delete(rec)
+            } else if !moveFiles {
+                update(id: rec.id) { $0.projectId = nil }
             } else {
                 do {
-                    try move(rec, to: nil)
+                    try await move(rec, to: nil)
                 } catch {
                     // Файл не переехал (например, идёт транскрипция) — всё равно
                     // отвязываем от Проекта; bookmark найдёт файл, если он остался.
@@ -112,6 +156,18 @@ final class RecordingsStore {
             }
         }
         saveNow()
+    }
+
+    /// После «Подключить заново» (Phase 3): записи Проекта, чей файл потерялся,
+    /// ищем по имени в новой папке и перепривязываем. Остальные не трогаем.
+    func relink(projectID: UUID, toDirectory dir: URL) {
+        for rec in recordings(inProject: projectID) where !rec.audioRemoved && !rec.audioFileName.isEmpty {
+            guard rec.resolveAudioURL() == nil else { continue }
+            let candidate = dir.appendingPathComponent(rec.audioFileName)
+            if FileManager.default.fileExists(atPath: candidate.path) {
+                relocateAudio(for: rec.id, to: candidate)
+            }
+        }
     }
 
     /// Суммарный размер медиа Проекта в байтах — для диалога удаления.
@@ -348,9 +404,15 @@ final class RecordingsStore {
     private func sweepStrayTranscriptsFromMediaFolders() {
         let fm = FileManager.default
 
-        // Все папки, в которых могли осесть наши .txt.
+        // Все папки, в которых могли осесть наши .txt. Папки external-Проектов
+        // (Phase 3) — личные папки юзера, туда не лезем: чистим только внутри
+        // служебной папки приложения и общей папки записей.
+        let appRoot = (try? AppSettings.metadataDirectory().standardizedFileURL.path) ?? ""
         var dirs: Set<String> = []
-        for rec in recordings { dirs.insert(mediaDirectory(for: rec).path) }
+        for rec in recordings {
+            let dir = mediaDirectory(for: rec).standardizedFileURL.path
+            if !appRoot.isEmpty, dir.hasPrefix(appRoot) { dirs.insert(dir) }
+        }
         dirs.insert(AppSettings.defaultRecordingsDirectory().path)
         if let user = try? AppSettings.recordingsDirectory() { dirs.insert(user.path) }
 
@@ -549,11 +611,22 @@ final class RecordingsStore {
 
 enum RecordingsStoreError: LocalizedError {
     case busyTranscribing
+    case anotherMoveInProgress
 
     var errorDescription: String? {
         switch self {
         case .busyTranscribing:
             return "Запись сейчас расшифровывается. Перенести её можно после окончания расшифровки."
+        case .anotherMoveInProgress:
+            return "Уже идёт перенос другой записи. Дождитесь его окончания."
         }
     }
+}
+
+/// Состояние переноса между дисками — для окна с прогрессом.
+struct MoveProgress: Equatable {
+    let recordingID: UUID
+    let recordingTitle: String
+    let destinationName: String
+    var fraction: Double
 }

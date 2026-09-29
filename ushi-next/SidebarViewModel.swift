@@ -114,7 +114,12 @@ final class SidebarViewModel {
     }
 
     func revealInFinder(_ project: Project) {
-        projectsModel.revealInFinder(project)
+        do {
+            try projectsModel.revealInFinder(project)
+        } catch {
+            projectsModel.refreshFolders()
+            alertMessage = error.localizedDescription
+        }
     }
 
     func commitRename(_ project: Project, to name: String) {
@@ -136,9 +141,32 @@ final class SidebarViewModel {
     }
 
     func deleteProject(_ project: Project, deleteRecordings: Bool) {
+        Task {
+            do {
+                try await projectsModel.delete(project, deleteRecordings: deleteRecordings, recordings: store)
+                collapsedProjectIDs.remove(project.id)
+            } catch {
+                alertMessage = error.localizedDescription
+            }
+        }
+    }
+
+    func isAvailable(_ project: Project) -> Bool {
+        projectsModel.isAvailable(project)
+    }
+
+    /// Путь папки external-Проекта для подсказки («~/Documents/Психолог»). nil — managed.
+    func folderPath(of project: Project) -> String? {
+        project.storage.displayPath.map(ProjectFolders.displayPath)
+    }
+
+    /// «Подключить заново…» (§7.6): выбрать папку взамен пропавшей.
+    func reconnect(_ project: Project) {
+        guard let folder = FolderPicker.chooseFolder(
+            message: "Выберите папку для проекта «\(project.name)»"
+        ) else { return }
         do {
-            try projectsModel.delete(project, deleteRecordings: deleteRecordings, recordings: store)
-            collapsedProjectIDs.remove(project.id)
+            try projectsModel.reconnect(project, to: folder, recordings: store)
         } catch {
             alertMessage = error.localizedDescription
         }
@@ -147,11 +175,15 @@ final class SidebarViewModel {
     // MARK: - Действия с записями
 
     func move(_ recording: Recording, to project: Project?) {
-        do {
-            try store.move(recording, to: project)
-            projectsModel.reload()
-        } catch {
-            alertMessage = error.localizedDescription
+        Task {
+            do {
+                try await store.move(recording, to: project)
+                projectsModel.reload()
+            } catch FileMoverError.cancelled {
+                // Юзер сам отменил — сообщать нечего, запись на месте.
+            } catch {
+                alertMessage = error.localizedDescription
+            }
         }
     }
 
