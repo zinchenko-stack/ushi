@@ -70,6 +70,18 @@ enum LegacyUshiImporter {
             throw error
         }
 
+        // Голосовая дорожка «Я / Собеседник» — нужна для повторной расшифровки.
+        // Не критична: не скопировалась — запись переносится без неё.
+        rec.voiceTrackFileName = nil
+        if let name = old.voiceTrackFileName, !name.isEmpty, hadMedia,
+           let voicesDir = try? AppSettings.voiceTracksDirectory() {
+            let source = legacyDir.appendingPathComponent("voices").appendingPathComponent(name)
+            let dest = FileMover.uniqueDestination(for: name, in: voicesDir)
+            if (try? await copy(source, to: dest)) != nil {
+                rec.voiceTrackFileName = dest.lastPathComponent
+            }
+        }
+
         // Статус: есть текст — готово; нет текста, но есть звук — в очередь; иначе — ошибка.
         if rec.transcriptFileName != nil {
             rec.status = .done

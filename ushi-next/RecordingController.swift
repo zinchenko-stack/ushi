@@ -175,7 +175,8 @@ final class RecordingController {
                 audioURL: result.url,
                 duration: result.duration,
                 project: project,
-                preset: preset
+                preset: preset,
+                voiceTrackURL: result.voiceTrackURL
             )
             if project == nil {
                 globalPreset = preset

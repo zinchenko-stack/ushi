@@ -319,7 +319,8 @@ final class RecordingsStore {
         audioURL: URL,
         duration: TimeInterval,
         project: Project? = nil,
-        preset: RecordingPreset? = nil
+        preset: RecordingPreset? = nil,
+        voiceTrackURL: URL? = nil
     ) -> Recording {
         let canTranscribe = ModelManager.shared.isReady
         let resolvedPreset = preset
@@ -343,7 +344,8 @@ final class RecordingsStore {
             hasSystemAudio: resolvedPreset.hasSystemAudio,
             hasScreen: resolvedPreset.hasScreen,
             titleSource: .fallback,
-            fileSize: fileSize
+            fileSize: fileSize,
+            voiceTrackFileName: voiceTrackURL?.lastPathComponent
         )
         recordings.insert(rec, at: 0)
 
@@ -456,6 +458,11 @@ final class RecordingsStore {
             if fm.fileExists(atPath: url.path) {
                 try? fm.removeItem(at: url)
             }
+            // Голосовая дорожка — та же речь, живёт не дольше основного файла.
+            if let voiceURL = rec.voiceTrackURL() {
+                try? fm.removeItem(at: voiceURL)
+            }
+            rec.voiceTrackFileName = nil
             rec.audioRemoved = true
             recordings[idx] = rec
         }
@@ -565,10 +572,13 @@ final class RecordingsStore {
     }
 
     private func runTranscription(id: UUID, audioURL: URL) async {
+        // Есть стерео-дорожка — расшифровка разметит «Я / Собеседник».
+        let voiceTrackURL = recordings.first(where: { $0.id == id })?.voiceTrackURL()
         do {
             let outputDir = try AppSettings.transcriptsDirectory()
             let txtURL = try await TranscriptionService.transcribe(
                 audioURL: audioURL,
+                voiceTrackURL: voiceTrackURL,
                 outputDirectory: outputDir
             )
             let transcriptBookmark = FileBookmark.create(from: txtURL)
@@ -591,7 +601,9 @@ final class RecordingsStore {
     private func applyAutoTitle(id: UUID, transcriptURL: URL) async {
         guard let idx = recordings.firstIndex(where: { $0.id == id }),
               recordings[idx].titleSource != .manual,
-              let text = try? String(contentsOf: transcriptURL, encoding: .utf8) else { return }
+              let labeled = try? String(contentsOf: transcriptURL, encoding: .utf8) else { return }
+        // Метки «Я:» / «Собеседник:» в название не тащим.
+        let text = TranscriptionService.removingSpeakerLabels(labeled)
 
         var finalTitle: String? = nil
         if SmartTitleModelManager.shared.isReady {

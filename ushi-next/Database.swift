@@ -105,6 +105,13 @@ enum AppDatabase {
             }
         }
 
+        // Разметка «Я / Собеседник»: имя стерео-дорожки в папке voices/.
+        m.registerMigration("v2_voice_track") { db in
+            try db.alter(table: "recording") { t in
+                t.add(column: "voice_track_file_name", .text)
+            }
+        }
+
         return m
     }
 }

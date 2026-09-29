@@ -6,6 +6,9 @@
 //  в ushi.app/Contents/Resources/ (статический, Metal embedded, см. Phase 2).
 //  Fallback на /opt/homebrew/bin/whisper-cli для разработки.
 //  Шаги: m4a -> wav (afconvert) -> whisper-cli -> .txt
+//  Если у записи есть голосовая дорожка (стерео: L = микрофон, R = система),
+//  распознаём её с --diarize: whisper сравнивает громкость каналов на каждом
+//  сегменте, а мы превращаем его метки в «Я:» / «Собеседник:».
 //
 
 import Foundation
@@ -128,6 +131,7 @@ struct TranscriptionService {
     /// пользовательскую папку с медиа.
     static func transcribe(
         audioURL: URL,
+        voiceTrackURL: URL? = nil,
         language: String? = nil,
         outputDirectory: URL? = nil
     ) async throws -> URL {
@@ -154,12 +158,21 @@ struct TranscriptionService {
         let t0 = Date()
         #endif
 
+        // Голосовая дорожка — тот же звук, но с каналами по источникам. Если её
+        // конвертация не удалась, молча откатываемся на обычный моно-микс.
         // Отдельная рабочая папка: WAV на входе и соседние файлы не трогаем.
         let workDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: workDir, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: workDir) }
         let wavURL = workDir.appendingPathComponent("input.wav")
-        try await convertToWav(input: audioURL, output: wavURL)
+        var diarize = false
+        if let voiceTrackURL,
+           FileManager.default.fileExists(atPath: voiceTrackURL.path),
+           (try? await convertToWav(input: voiceTrackURL, output: wavURL, channels: 2)) != nil {
+            diarize = true
+        } else {
+            try await convertToWav(input: audioURL, output: wavURL, channels: 1)
+        }
 
         #if DEBUG
         print("🧠 [transcribe] wav ready in \(String(format: "%.1f", Date().timeIntervalSince(t0)))s")
@@ -185,7 +198,8 @@ struct TranscriptionService {
             wavPath: wavURL.path,
             language: language,
             outputPrefix: outputPrefix,
-            vadModel: vadModel
+            vadModel: vadModel,
+            diarize: diarize
         )
 
         #if DEBUG
@@ -199,16 +213,72 @@ struct TranscriptionService {
 
         // Пост-фильтр галлюцинаций (сетка безопасности поверх VAD).
         if let raw = try? String(contentsOf: txtURL, encoding: .utf8) {
-            let cleaned = cleanTranscript(raw)
+            let cleaned = diarize ? labelSpeakers(raw) : cleanTranscript(raw)
             try? cleaned.write(to: txtURL, atomically: true, encoding: .utf8)
         }
 
         return txtURL
     }
 
+    // MARK: - Говорящие
+
+    nonisolated static let selfLabel = "Я"
+    nonisolated static let otherLabel = "Собеседник"
+
+    /// Превращает вывод `whisper-cli --diarize` в реплики по говорящим.
+    /// Вход: строки вида `(speaker 0) текст`, где 0 = левый канал (микрофон),
+    /// 1 = правый (система), `?` = громкость каналов сравнима.
+    /// Выход: подряд идущие сегменты одного говорящего склеены в одну реплику,
+    /// реплики разделены пустой строкой: «Я: …», «Собеседник: …».
+    static func labelSpeakers(_ raw: String) -> String {
+        var turns: [(speaker: String, text: String)] = []
+        var lastNorm: String?
+
+        for rawLine in raw.components(separatedBy: .newlines) {
+            var line = rawLine.trimmingCharacters(in: .whitespaces)
+            var speaker: String?
+            if line.hasPrefix("(speaker "), let close = line.firstIndex(of: ")") {
+                let id = line[line.index(line.startIndex, offsetBy: 9)..<close]
+                switch id {
+                case "0": speaker = selfLabel
+                case "1": speaker = otherLabel
+                default:  speaker = nil      // «?» — непонятно, приклеим к предыдущему
+                }
+                line = String(line[line.index(after: close)...])
+                    .trimmingCharacters(in: .whitespaces)
+            }
+
+            // Тот же фильтр галлюцинаций, что и для обычного транскрипта, но по тексту без метки.
+            let text = cleanTranscript(line)
+            if text.isEmpty { continue }
+            let norm = text.lowercased()
+            if norm == lastNorm { continue }
+            lastNorm = norm
+
+            let who = speaker ?? turns.last?.speaker ?? otherLabel
+            if let last = turns.last, last.speaker == who {
+                turns[turns.count - 1].text += " " + text
+            } else {
+                turns.append((who, text))
+            }
+        }
+
+        return turns.map { "\($0.speaker): \($0.text)" }.joined(separator: "\n\n")
+    }
+
+    /// Текст без меток говорящих — для авто-названия и поиска по смыслу.
+    nonisolated static func removingSpeakerLabels(_ text: String) -> String {
+        text.components(separatedBy: "\n").map { line in
+            for label in [selfLabel, otherLabel] where line.hasPrefix(label + ":") {
+                return String(line.dropFirst(label.count + 1)).trimmingCharacters(in: .whitespaces)
+            }
+            return line
+        }.joined(separator: "\n")
+    }
+
     // MARK: - afconvert
 
-    private static func convertToWav(input: URL, output: URL) async throws {
+    private static func convertToWav(input: URL, output: URL, channels: Int) async throws {
         try? FileManager.default.removeItem(at: output)
 
         let process = Process()
@@ -218,7 +288,7 @@ struct TranscriptionService {
             output.path,
             "-d", "LEI16@16000",
             "-f", "WAVE",
-            "-c", "1",
+            "-c", String(channels),
         ]
         process.standardError = Pipe()
         process.standardOutput = Pipe()
@@ -235,7 +305,7 @@ struct TranscriptionService {
 
     private static func runWhisper(
         binary: String, model: String, wavPath: String,
-        language: String, outputPrefix: String, vadModel: URL?
+        language: String, outputPrefix: String, vadModel: URL?, diarize: Bool
     ) async throws {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: binary)
@@ -249,6 +319,9 @@ struct TranscriptionService {
         ]
         if let vadModel {
             args += ["--vad", "--vad-model", vadModel.path]
+        }
+        if diarize {
+            args.append("--diarize")     // стерео: метка говорящего по громкости каналов
         }
         process.arguments = args
         process.standardError = Pipe()

@@ -52,6 +52,7 @@ final class AudioRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
     private var stream: SCStream?
     private var writer: RecordingWriter?
     private var currentFileURL: URL?
+    private var currentVoiceTrackURL: URL?
     private var startDate: Date?
     private var timer: Timer?
 
@@ -164,11 +165,19 @@ final class AudioRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
 
         // 2. Готовим writer (на sampleQueue, чтобы избежать гонок).
         let fileURL = try makeOutputURL(video: wantVideo)
-        let writer = try RecordingWriter(outputURL: fileURL, video: wantVideo,
+        // Стерео «голосовая дорожка» (L = микрофон, R = система) для разметки
+        // «Я / Собеседник» — только когда пишутся оба источника.
+        var voiceURL: URL?
+        if useMic, wantSystemAudio, let dir = try? AppSettings.voiceTracksDirectory() {
+            voiceURL = dir.appendingPathComponent(UUID().uuidString + ".m4a")
+        }
+        let writer = try RecordingWriter(outputURL: fileURL, voiceTrackURL: voiceURL,
+                                         video: wantVideo,
                                          videoSize: videoSize, videoBitrate: videoBitrate)
 
         sampleQueue.sync {
             self.currentFileURL = fileURL
+            self.currentVoiceTrackURL = writer.voiceTrackURL
             self.writer = writer
         }
 
@@ -206,7 +215,7 @@ final class AudioRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
     // MARK: Стоп
 
     @discardableResult
-    func stop() async throws -> (url: URL, duration: TimeInterval) {
+    func stop() async throws -> (url: URL, voiceTrackURL: URL?, duration: TimeInterval) {
         guard isRecording, !isStopping else {
             throw NSError(domain: "ushi", code: 2,
                 userInfo: [NSLocalizedDescriptionKey: "Запись не идёт"])
@@ -233,16 +242,19 @@ final class AudioRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
 
         // На sampleQueue дописываем хвост и закрываем входы — после барьера гарантировано,
         // что все sample-колбэки отработали. finishWriting() ждём уже вне очереди.
-        let (writer, url): (RecordingWriter?, URL?) = await withCheckedContinuation { cont in
+        let (writer, url, voiceURL): (RecordingWriter?, URL?, URL?) = await withCheckedContinuation { cont in
             sampleQueue.async {
                 let w = self.writer
                 let u = self.currentFileURL
                 w?.finishInputs()
+                // Читаем после finishInputs: при сбое записи дорожка сбрасывается.
+                let v = w?.voiceTrackURL
                 self.writer = nil
                 self.currentFileURL = nil
+                self.currentVoiceTrackURL = nil
                 self.lastSystemRMS = 0
                 self.lastMicRMS = 0
-                cont.resume(returning: (w, u))
+                cont.resume(returning: (w, u, v))
             }
         }
         try await writer?.complete()
@@ -258,7 +270,10 @@ final class AudioRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
             throw NSError(domain: "ushi", code: 6,
                 userInfo: [NSLocalizedDescriptionKey: "Запись прервалась до получения звука или видео."])
         }
-        return (url, duration)
+        let voiceTrack = voiceURL.flatMap {
+            FileManager.default.fileExists(atPath: $0.path) ? $0 : nil
+        }
+        return (url, voiceTrack, duration)
     }
 
     // MARK: SCStreamOutput — приём буферов (на sampleQueue)
@@ -363,6 +378,8 @@ final class AudioRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
 // MARK: - Writer: сведённый звук (+ опц. видео) в один файл через AVAssetWriter
 
 /// Пишет аудио-микс (система + микрофон) и, если задано, видео экрана в один файл.
+/// Параллельно (если задан voiceTrackURL) пишет стерео-дорожку L = микрофон, R = система —
+/// по ней whisper размечает «Я / Собеседник».
 /// Все методы вызываются на одной очереди (sampleQueue), кроме complete().
 final class RecordingWriter {
 
@@ -371,6 +388,14 @@ final class RecordingWriter {
     private let writer: AVAssetWriter
     private let audioInput: AVAssetWriterInput
     private let videoInput: AVAssetWriterInput?
+
+    /// Стерео «голосовая дорожка» для разметки говорящих. nil — не пишем.
+    private var voiceFile: AVAudioFile?
+    private let voiceFormat: AVAudioFormat?
+    private(set) var voiceTrackURL: URL?
+    // Те же сэмплы, что в mix, но раздельно по источникам (индексация как у mix).
+    private var micPart: [Float] = []
+    private var systemPart: [Float] = []
 
     // Общая точка отсчёта таймлайна (PTS первого пришедшего буфера любого типа).
     private var anchor: CMTime?
@@ -387,7 +412,7 @@ final class RecordingWriter {
     private var maxFrame: Int64 = 0         // максимум (start+len) среди принятых
     private let lagFrames: Int64 = 14_400   // ~0.3 с запас перед флашем
 
-    init(outputURL: URL, video: Bool, videoSize: CGSize, videoBitrate: Int) throws {
+    init(outputURL: URL, voiceTrackURL: URL? = nil, video: Bool, videoSize: CGSize, videoBitrate: Int) throws {
         writer = try AVAssetWriter(outputURL: outputURL, fileType: video ? .mov : .m4a)
 
         let audioSettings: [String: Any] = [
@@ -436,6 +461,26 @@ final class RecordingWriter {
         }
         canonical = fmt
 
+        // Голосовая дорожка — не критична: если не открылась, запись идёт без неё.
+        let stereo = AVAudioFormat(commonFormat: .pcmFormatFloat32,
+                                   sampleRate: 48_000, channels: 2, interleaved: false)
+        voiceFormat = stereo
+        if let voiceTrackURL, stereo != nil {
+            let voiceSettings: [String: Any] = [
+                AVFormatIDKey: kAudioFormatMPEG4AAC,
+                AVSampleRateKey: 48_000,
+                AVNumberOfChannelsKey: 2,
+                AVEncoderBitRateKey: 96_000,
+            ]
+            do {
+                voiceFile = try AVAudioFile(forWriting: voiceTrackURL, settings: voiceSettings,
+                                            commonFormat: .pcmFormatFloat32, interleaved: false)
+                self.voiceTrackURL = voiceTrackURL
+            } catch {
+                print("⚠️ voice track disabled: \(error.localizedDescription)")
+            }
+        }
+
         guard writer.startWriting() else {
             throw writer.error ?? NSError(domain: "ushi", code: 12,
                 userInfo: [NSLocalizedDescriptionKey: "Не удалось начать запись"])
@@ -480,15 +525,27 @@ final class RecordingWriter {
 
         let end = idx + (n - srcOffset)
         if end > mix.count {
-            mix.append(contentsOf: repeatElement(0, count: end - mix.count))
+            let grow = end - mix.count
+            mix.append(contentsOf: repeatElement(0, count: grow))
+            if voiceFile != nil {
+                micPart.append(contentsOf: repeatElement(0, count: grow))
+                systemPart.append(contentsOf: repeatElement(0, count: grow))
+            }
         }
 
         var i = idx
         var s = srcOffset
         var sumSq: Float = 0
+        let keepParts = voiceFile != nil
         while s < n {
             let v = mono[s]
             mix[i] += v
+            if keepParts {
+                switch source {
+                case .microphone: micPart[i] += v
+                case .system:     systemPart[i] += v
+                }
+            }
             sumSq += v * v
             i += 1
             s += 1
@@ -503,9 +560,10 @@ final class RecordingWriter {
 
     /// Дописывает остаток и помечает входы законченными. Вызывать на sampleQueue.
     func finishInputs() {
-        guard writer.status == .writing else { return }
-        guard anchor != nil else { writer.cancelWriting(); return }
+        guard writer.status == .writing else { dropVoiceTrack(); return }
+        guard anchor != nil else { writer.cancelWriting(); dropVoiceTrack(); return }
         flush(upTo: maxFrame, force: true)
+        voiceFile = nil          // деинициализация AVAudioFile дописывает и закрывает файл
         audioInput.markAsFinished()
         videoInput?.markAsFinished()
     }
@@ -513,6 +571,7 @@ final class RecordingWriter {
     /// Дожидается записи файла на диск. Вызывать вне sampleQueue.
     func cancel() {
         if writer.status == .writing || writer.status == .unknown { writer.cancelWriting() }
+        dropVoiceTrack()
     }
 
     func complete() async throws {
@@ -551,9 +610,50 @@ final class RecordingWriter {
         let pts = CMTimeAdd(anchor, CMTime(value: mixBase, timescale: 48_000))
         guard let sb = makeAudioSampleBuffer(from: pcm, pts: pts) else { return }
         audioInput.append(sb)
+        writeVoiceTrack(count: count)
 
         mix.removeFirst(count)
         mixBase += Int64(count)
+    }
+
+    /// Пишет первые `count` сэмплов раздельных источников в стерео-дорожку и сдвигает их.
+    private func writeVoiceTrack(count: Int) {
+        guard voiceFile != nil else { return }
+        guard let file = voiceFile, let fmt = voiceFormat,
+              micPart.count >= count, systemPart.count >= count,
+              let pcm = AVAudioPCMBuffer(pcmFormat: fmt, frameCapacity: AVAudioFrameCount(count)),
+              let ch = pcm.floatChannelData else {
+            dropVoiceTrack()
+            return
+        }
+        pcm.frameLength = AVAudioFrameCount(count)
+        micPart.withUnsafeBufferPointer { src in
+            if let base = src.baseAddress { ch[0].update(from: base, count: count) }
+        }
+        systemPart.withUnsafeBufferPointer { src in
+            if let base = src.baseAddress { ch[1].update(from: base, count: count) }
+        }
+        micPart.removeFirst(count)
+        systemPart.removeFirst(count)
+        do {
+            try file.write(from: pcm)
+        } catch {
+            print("⚠️ voice track write failed: \(error.localizedDescription)")
+            dropVoiceTrack()
+        }
+    }
+
+    /// Дорожка с дырой хуже, чем никакой: транскрипция по ней потеряет текст.
+    /// Поэтому при любом сбое удаляем файл целиком — тогда распознаём основной микс.
+    private func dropVoiceTrack() {
+        guard voiceFile != nil || voiceTrackURL != nil else { return }
+        voiceFile = nil
+        micPart = []
+        systemPart = []
+        if let url = voiceTrackURL {
+            try? FileManager.default.removeItem(at: url)
+        }
+        voiceTrackURL = nil
     }
 
     private func makeAudioSampleBuffer(from pcm: AVAudioPCMBuffer, pts: CMTime) -> CMSampleBuffer? {

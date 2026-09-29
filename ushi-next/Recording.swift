@@ -68,6 +68,10 @@ struct Recording: Identifiable, Codable, Hashable {
     /// Размер файла в байтах. 0 если ещё не посчитан.
     var fileSize: Int64
 
+    /// Стерео-дорожка «микрофон / система» в служебной папке voices/.
+    /// Есть только у записей с обоими источниками; по ней размечаются говорящие.
+    var voiceTrackFileName: String?
+
     init(
         id: UUID = UUID(),
         title: String,
@@ -87,7 +91,8 @@ struct Recording: Identifiable, Codable, Hashable {
         hasScreen: Bool = false,
         titleSource: TitleSource = .fallback,
         transcriptStatus: TranscriptStatus? = nil,
-        fileSize: Int64 = 0
+        fileSize: Int64 = 0,
+        voiceTrackFileName: String? = nil
     ) {
         self.id = id
         self.title = title
@@ -108,6 +113,7 @@ struct Recording: Identifiable, Codable, Hashable {
         self.titleSource = titleSource
         self.transcriptStatus = transcriptStatus ?? status.transcriptStatus
         self.fileSize = fileSize
+        self.voiceTrackFileName = voiceTrackFileName
     }
 
     // MARK: - JSON Codable (для миграции старого recordings.json)
@@ -122,6 +128,7 @@ struct Recording: Identifiable, Codable, Hashable {
         case presetSnapshot
         case hasMicrophone, hasSystemAudio, hasScreen
         case titleSource, transcriptStatus, fileSize
+        case voiceTrackFileName
     }
 
     init(from decoder: Decoder) throws {
@@ -169,6 +176,7 @@ struct Recording: Identifiable, Codable, Hashable {
         transcriptStatus = (try c.decodeIfPresent(TranscriptStatus.self, forKey: .transcriptStatus))
             ?? status.transcriptStatus
         fileSize = try c.decodeIfPresent(Int64.self, forKey: .fileSize) ?? 0
+        voiceTrackFileName = try c.decodeIfPresent(String.self, forKey: .voiceTrackFileName)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -192,6 +200,7 @@ struct Recording: Identifiable, Codable, Hashable {
         try c.encode(titleSource, forKey: .titleSource)
         try c.encode(transcriptStatus, forKey: .transcriptStatus)
         try c.encode(fileSize, forKey: .fileSize)
+        try c.encodeIfPresent(voiceTrackFileName, forKey: .voiceTrackFileName)
     }
 
     // MARK: - URL helpers (без изменений по сравнению с Phase 0)
@@ -205,6 +214,14 @@ struct Recording: Identifiable, Codable, Hashable {
 
     func transcriptDirectoryURL() -> URL? {
         try? AppSettings.transcriptsDirectory()
+    }
+
+    /// Голосовая дорожка, если она ещё лежит на диске.
+    func voiceTrackURL() -> URL? {
+        guard let name = voiceTrackFileName, !name.isEmpty,
+              let dir = try? AppSettings.voiceTracksDirectory() else { return nil }
+        let url = dir.appendingPathComponent(name)
+        return FileManager.default.fileExists(atPath: url.path) ? url : nil
     }
 
     func transcriptURL() -> URL? {
@@ -264,6 +281,7 @@ extension Recording: FetchableRecord, MutablePersistableRecord {
         static let audioBookmark = Column("audio_bookmark")
         static let transcriptBookmark = Column("transcript_bookmark")
         static let processingStatus = Column("processing_status")
+        static let voiceTrackFileName = Column("voice_track_file_name")
     }
 
     init(row: Row) throws {
@@ -299,6 +317,7 @@ extension Recording: FetchableRecord, MutablePersistableRecord {
         self.transcriptBookmark = row[Columns.transcriptBookmark]
         let processingRaw: String = row[Columns.processingStatus]
         self.status = ProcessingStatus(rawValue: processingRaw) ?? .pending
+        self.voiceTrackFileName = row[Columns.voiceTrackFileName]
     }
 
     func encode(to container: inout PersistenceContainer) throws {
@@ -323,5 +342,6 @@ extension Recording: FetchableRecord, MutablePersistableRecord {
         container[Columns.audioBookmark] = audioBookmark
         container[Columns.transcriptBookmark] = transcriptBookmark
         container[Columns.processingStatus] = status.rawValue
+        container[Columns.voiceTrackFileName] = voiceTrackFileName
     }
 }

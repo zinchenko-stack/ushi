@@ -207,6 +207,16 @@ enum AppSettings {
         return dir
     }
 
+    /// Служебные стерео-дорожки (L = микрофон, R = система) для разметки «Я / Собеседник».
+    static func voiceTracksDirectory() throws -> URL {
+        let fm = FileManager.default
+        let dir = try metadataDirectory().appendingPathComponent("voices", isDirectory: true)
+        if !fm.fileExists(atPath: dir.path) {
+            try fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        }
+        return dir
+    }
+
     /// Куда складываем orphan-Записи (без Проекта). Phase 1: переехало из
     /// `~/Documents/UshiNext/` в `Application Support/UshiNext/Recordings/`,
     /// см. phase-1.md §7. Managed-всё-в-AppSupport, user-visible только через

@@ -24,6 +24,9 @@ final class RecordingFileCoordinator {
         if let (txtURL, _) = recording.resolveTranscriptURL() {
             try? fm.removeItem(at: txtURL)
         }
+        if let voiceURL = recording.voiceTrackURL() {
+            try? fm.removeItem(at: voiceURL)
+        }
     }
 
     /// Переименовывает файлы записи на диске под новое название и возвращает обновленные пути и закладки.
