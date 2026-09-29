@@ -258,8 +258,8 @@ struct HeroStartView: View {
         if let sourceHint {
             // Подсказка — в той же плашке, что и «Запись сохранена».
             HStack(alignment: .center, spacing: 10) {
-                Image(systemName: "info.circle.fill")
-                    .foregroundStyle(.secondary)
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.yellow)
                 Text(sourceHint)
                     .fontWeight(.medium)
             }
