@@ -43,7 +43,7 @@ enum AppState {
     // MARK: - Удобные обёртки на shared DB
 
     static func lastUsedPreset() -> RecordingPreset {
-        (try? AppDatabase.shared.read { try lastUsedPreset(in: $0) }) ?? .micOnly
+        ((try? AppDatabase.shared.read { try lastUsedPreset(in: $0) }) ?? .micOnly).resolvedForThisMac
     }
 
     static func setLastUsedPreset(_ preset: RecordingPreset) {

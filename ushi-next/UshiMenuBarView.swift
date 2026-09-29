@@ -22,7 +22,8 @@ struct UshiMenuBarView: View {
                     if recorder.isRecording {
                         await recordingController.stop()
                     } else {
-                        await recordingController.startCurrentConfiguration()
+                        // Из menu bar — сразу, без отсчёта: окно может быть скрыто.
+                        await recordingController.startInInbox(withCountdown: false)
                     }
                 }
                 dismissPopover()
@@ -30,17 +31,16 @@ struct UshiMenuBarView: View {
 
             MenuDivider()
 
-            Toggle("Запись микрофона", isOn: Binding(
-                get: { recorder.micEnabled },
-                set: { recorder.micEnabled = $0 }
-            ))
-            .disabled(recorder.isRecording || recordingController.isBusy)
-
-            Toggle("Запись экрана", isOn: Binding(
-                get: { recorder.captureVideo },
-                set: { recorder.captureVideo = $0 }
-            ))
-            .disabled(recorder.isRecording || recordingController.isBusy)
+            // Источники правят глобальный app.lastUsedPreset (§6.9) — тот же выбор,
+            // что под кнопкой «Начать запись» в окне. Полное меню v2 — Phase 5.
+            ForEach(RecordingPreset.Source.available, id: \.self) { source in
+                Toggle(source.title, isOn: $recordingController.globalPreset.binding(for: source))
+                    .disabled(
+                        recorder.isRecording
+                            || recordingController.isBusy
+                            || !recordingController.globalPreset.canToggle(source)
+                    )
+            }
 
             MenuDivider()
 

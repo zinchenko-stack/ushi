@@ -79,7 +79,7 @@ extension Project: FetchableRecord, MutablePersistableRecord {
             displayPath: displayPath
         )
         let presetRaw: String = row[Columns.lastUsedPreset]
-        self.lastUsedPreset = RecordingPreset(rawValue: presetRaw) ?? .micOnly
+        self.lastUsedPreset = (RecordingPreset(rawValue: presetRaw) ?? .micOnly).resolvedForThisMac
         self.isPinned = row[Columns.isPinned]
         self.createdAt = row[Columns.createdAt]
         self.updatedAt = row[Columns.updatedAt]

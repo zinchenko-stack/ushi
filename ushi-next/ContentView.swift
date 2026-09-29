@@ -8,12 +8,18 @@ import AppKit
 
 struct ContentView: View {
     let recordingController: RecordingController
-    @State private var selection: SidebarSection? = .recording
+    @State private var sidebarModel: SidebarViewModel
+    @State private var selection: MainSelection? = .home
     @State private var hasScreenAccess = ScreenRecordingPermission.isGranted
     @State private var path: [Recording] = []
     @Environment(UpdateChecker.self) private var updateChecker
     @Environment(ModelManager.self) private var modelManager
     @AppStorage("update.dismissedVersion") private var dismissedUpdateVersion = ""
+
+    init(recordingController: RecordingController) {
+        self.recordingController = recordingController
+        self._sidebarModel = State(initialValue: SidebarViewModel(controller: recordingController))
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -86,30 +92,41 @@ struct ContentView: View {
 
     private var mainView: some View {
         NavigationSplitView {
-            Sidebar(selection: $selection)
-                .navigationSplitViewColumnWidth(min: 180, ideal: 220, max: 280)
+            SidebarView(model: sidebarModel, selection: $selection)
+                .navigationSplitViewColumnWidth(min: 220, ideal: 250, max: 320)
         } detail: {
             NavigationStack(path: $path) {
-                Group {
-                    switch selection ?? .recording {
-                    case .recording:
-                        RecordingView(recordingController: recordingController) { rec in
-                            path.append(rec)
-                        }
-                    case .history:
-                        HistoryView(store: recordingController.store)
-                    case .settings:
-                        SettingsView()
+                detail
+                    .navigationDestination(for: Recording.self) { rec in
+                        RecordingDetailView(recording: rec, store: recordingController.store)
                     }
-                }
-                .navigationDestination(for: Recording.self) { rec in
-                    RecordingDetailView(recording: rec, store: recordingController.store)
-                }
             }
-            .frame(minWidth: 680, maxWidth: .infinity, maxHeight: .infinity)
+            .frame(minWidth: 620, maxWidth: .infinity, maxHeight: .infinity)
         }
         // При смене раздела сбрасываем стек, чтобы не оставалась открытая деталь.
         .onChange(of: selection) { _, _ in path = [] }
+    }
+
+    @ViewBuilder
+    private var detail: some View {
+        switch selection ?? .home {
+        case .home:
+            HeroStartView(controller: recordingController) { rec in
+                selection = .recording(rec.id)
+            }
+        case .search:
+            HistoryView(store: recordingController.store)
+        case .settings:
+            SettingsView()
+        case .recording(let id):
+            if let rec = recordingController.store.recordings.first(where: { $0.id == id }) {
+                RecordingDetailView(recording: rec, store: recordingController.store)
+                    .id(id)   // новый плеер и состояние на каждую запись
+            } else {
+                // Запись удалили — возвращаемся на hero.
+                Color.clear.task { selection = .home }
+            }
+        }
     }
 }
 

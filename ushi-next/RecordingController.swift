@@ -2,49 +2,141 @@
 //  RecordingController.swift
 //  ushi
 //
+//  Единая точка старта/стопа записи для окна и menu bar.
+//  Phase 2: запись стартует с пресетом и целевым Проектом (или в «Записи»),
+//  см. §7.1 брифа. Обратный отсчёт тоже живёт здесь, чтобы кнопка в sidebar,
+//  ⏺ у Проекта и hero-экран делили одно состояние.
+//
 
 import Foundation
 import AppKit
 import AVFoundation
 import Observation
 
-enum RecordingMode {
-    case systemAudio
-    case systemAudioAndMicrophone
-    case screen
-}
-
 @MainActor
 @Observable
 final class RecordingController {
     let recorder: AudioRecorder
     let store: RecordingsStore
+    let projects: ProjectsModel
 
     private(set) var isBusy = false
     private(set) var errorMessage: String?
     private(set) var lastSavedRecording: Recording?
 
+    /// Идёт обратный отсчёт перед стартом (3…2…1). nil — отсчёта нет.
+    private(set) var countdown: Int?
+    @ObservationIgnored private var countdownTask: Task<Void, Never>?
+    private let countdownStart = 3
+
+    /// Куда и с каким пресетом пишется текущая (или готовящаяся) запись.
+    private(set) var activePreset: RecordingPreset?
+    private(set) var activeProjectID: UUID?
+
+    /// Глобальный `app.lastUsedPreset` (§6.4, §13). Зеркалит таблицу app_state,
+    /// чтобы chip-ы в UI обновлялись без перечитывания БД.
+    var globalPreset: RecordingPreset {
+        didSet {
+            guard globalPreset != oldValue else { return }
+            AppState.setLastUsedPreset(globalPreset)
+        }
+    }
+
     init() {
         self.recorder = AudioRecorder()
         self.store = RecordingsStore()
+        self.projects = ProjectsModel()
+        self.globalPreset = AppState.lastUsedPreset()
     }
 
     init(
         recorder: AudioRecorder,
-        store: RecordingsStore
+        store: RecordingsStore,
+        projects: ProjectsModel
     ) {
         self.recorder = recorder
         self.store = store
+        self.projects = projects
+        self.globalPreset = AppState.lastUsedPreset()
     }
 
-    func startCurrentConfiguration() async {
-        await start(alertOnFailure: false)
+    var isRecording: Bool { recorder.isRecording }
+    var isCountingDown: Bool { countdown != nil }
+
+    /// Проект, в который идёт текущая запись (nil — «Записи»).
+    var activeProject: Project? { projects.project(id: activeProjectID) }
+
+    // MARK: - Старт
+
+    /// Главная кнопка / menu bar «Начать запись»: в «Записи» с глобальным пресетом (§7.1, путь 1).
+    func startInInbox(withCountdown: Bool = true) async {
+        await start(preset: globalPreset, project: nil, withCountdown: withCountdown)
     }
 
-    func start(mode: RecordingMode, alertOnFailure: Bool = true) async {
-        configureRecorder(for: mode)
-        await start(alertOnFailure: alertOnFailure)
+    /// ⏺ у Проекта: в Проект с его пресетом (§7.1, путь 2).
+    func startInProject(_ project: Project, withCountdown: Bool = true) async {
+        await start(preset: project.lastUsedPreset, project: project, withCountdown: withCountdown)
     }
+
+    /// Общий путь старта, в т.ч. из hero-экрана с выбранными chip-ами (§7.1, путь 3).
+    func start(
+        preset: RecordingPreset,
+        project: Project?,
+        withCountdown: Bool = true,
+        alertOnFailure: Bool = false
+    ) async {
+        guard !isBusy, !recorder.isRecording, countdown == nil else { return }
+        errorMessage = nil
+        activePreset = preset
+        activeProjectID = project?.id
+
+        if withCountdown {
+            let task = Task { await runCountdown() }
+            countdownTask = task
+            await task.value
+            countdownTask = nil
+            guard !task.isCancelled else {
+                activePreset = nil
+                activeProjectID = nil
+                return
+            }
+        }
+
+        isBusy = true
+        defer { isBusy = false }
+
+        do {
+            configureRecorder(for: preset, project: project)
+            try await ensurePermissionsForCurrentConfiguration()
+            try await recorder.start()
+            errorMessage = nil
+        } catch {
+            activePreset = nil
+            activeProjectID = nil
+            handle(error, alertOnFailure: alertOnFailure)
+        }
+    }
+
+    /// Тап во время отсчёта = отмена.
+    func cancelCountdown() {
+        countdownTask?.cancel()
+        countdown = nil
+    }
+
+    private func runCountdown() async {
+        for n in stride(from: countdownStart, through: 1, by: -1) {
+            countdown = n
+            do {
+                try await Task.sleep(for: .seconds(1))
+            } catch {
+                countdown = nil
+                return
+            }
+        }
+        countdown = nil
+    }
+
+    // MARK: - Стоп
 
     func stop(alertOnFailure: Bool = true) async {
         guard !isBusy, recorder.isRecording else { return }
@@ -54,12 +146,26 @@ final class RecordingController {
 
         do {
             let result = try await recorder.stop()
-            let recording = store.addRecording(audioURL: result.url, duration: result.duration)
+            let project = activeProject
+            let preset = activePreset ?? project?.lastUsedPreset ?? globalPreset
+            // addRecording сам обновляет sticky-пресет контекста (§7.2).
+            let recording = store.addRecording(
+                audioURL: result.url,
+                duration: result.duration,
+                project: project,
+                preset: preset
+            )
+            if project == nil {
+                globalPreset = preset
+            }
+            projects.reload()
             lastSavedRecording = recording
             errorMessage = nil
         } catch {
             handle(error, alertOnFailure: alertOnFailure)
         }
+        activePreset = nil
+        activeProjectID = nil
     }
 
     func dismissError() {
@@ -71,35 +177,14 @@ final class RecordingController {
         return lastSavedRecording
     }
 
-    private func start(alertOnFailure: Bool) async {
-        guard !isBusy, !recorder.isRecording else { return }
+    // MARK: - Конфигурация
 
-        isBusy = true
-        defer { isBusy = false }
-
-        do {
-            try await ensurePermissionsForCurrentConfiguration()
-            try await recorder.start()
-            errorMessage = nil
-        } catch {
-            handle(error, alertOnFailure: alertOnFailure)
-        }
-    }
-
-    private func configureRecorder(for mode: RecordingMode) {
+    private func configureRecorder(for preset: RecordingPreset, project: Project?) {
         guard !recorder.isRecording else { return }
-
-        switch mode {
-        case .systemAudio:
-            recorder.micEnabled = false
-            recorder.captureVideo = false
-        case .systemAudioAndMicrophone:
-            recorder.micEnabled = true
-            recorder.captureVideo = false
-        case .screen:
-            recorder.micEnabled = false
-            recorder.captureVideo = true
-        }
+        recorder.micEnabled = preset.hasMicrophone
+        recorder.systemAudioEnabled = preset.hasSystemAudio
+        recorder.captureVideo = preset.hasScreen
+        recorder.outputDirectory = project.flatMap { try? AppSettings.recordingsDirectory(for: $0) }
     }
 
     private func ensurePermissionsForCurrentConfiguration() async throws {

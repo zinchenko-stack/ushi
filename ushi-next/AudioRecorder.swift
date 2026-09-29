@@ -10,6 +10,8 @@
 //  Всё пишется через AVAssetWriter: аудио-вход всегда, видео-вход — по флагу.
 //  Аудио и видео идут по часам одного SCStream, поэтому совпадают по времени.
 //  Захват микрофона требует macOS 15+; на 14.x пишется только система.
+//  Системный звук можно выключить (пресет «Только микрофон») — тогда в файл
+//  идёт только микрофон, SCStream всё равно нужен как источник часов.
 //
 
 import Foundation
@@ -33,6 +35,14 @@ final class AudioRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
     /// Писать ли видео всего экрана. Меняется только когда запись не идёт.
     /// false = только звук (.m4a), true = видео + звук (.mov).
     var captureVideo = false
+
+    /// Писать ли системный звук (голос собеседника). Меняется только когда запись не идёт.
+    /// false + micEnabled = пресет «Только микрофон».
+    var systemAudioEnabled = true
+
+    /// Куда класть следующий файл. nil = общая папка записей (orphan).
+    /// Ставится перед start() — например, в папку Проекта.
+    var outputDirectory: URL?
 
     // MARK: Приватное
 
@@ -85,8 +95,16 @@ final class AudioRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
 
         let filter = SCContentFilter(display: display, excludingApplications: [], exceptingWindows: [])
 
+        // Без системного звука и без микрофона писать нечего — например, пресет
+        // «Только микрофон» на macOS 14, где захват микрофона недоступен.
+        let wantSystemAudio = systemAudioEnabled
+        guard wantSystemAudio || useMic else {
+            throw NSError(domain: "ushi", code: 5, userInfo: [NSLocalizedDescriptionKey:
+                "Запись только с микрофона доступна на macOS 15 и новее. Выбери «Системный звук + микрофон»."])
+        }
+
         let config = SCStreamConfiguration()
-        config.capturesAudio = true
+        config.capturesAudio = wantSystemAudio
         config.excludesCurrentProcessAudio = true
         config.sampleRate = 48_000
         config.channelCount = 2
@@ -141,7 +159,9 @@ final class AudioRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
 
         // 3. Создаём поток и подписываемся на нужные типы.
         let stream = SCStream(filter: filter, configuration: config, delegate: self)
-        try stream.addStreamOutput(self, type: .audio, sampleHandlerQueue: sampleQueue)
+        if wantSystemAudio {
+            try stream.addStreamOutput(self, type: .audio, sampleHandlerQueue: sampleQueue)
+        }
         if useMic, #available(macOS 15.0, *) {
             try stream.addStreamOutput(self, type: .microphone, sampleHandlerQueue: sampleQueue)
         }
@@ -286,7 +306,13 @@ final class AudioRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
     // MARK: Файлы
 
     private func makeOutputURL(video: Bool) throws -> URL {
-        let dir = try Self.documentsDirectory()
+        let dir: URL
+        if let outputDirectory {
+            try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+            dir = outputDirectory
+        } else {
+            dir = try Self.documentsDirectory()
+        }
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd_HHmmss"
         formatter.locale = Locale(identifier: "en_US_POSIX")

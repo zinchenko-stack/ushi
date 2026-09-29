@@ -42,7 +42,100 @@ final class RecordingsStore {
         guard !trimmed.isEmpty else { return }
 
         recordings[idx].title = trimmed
+        recordings[idx].titleSource = .manual
         renameFilesOnDisk(at: idx)
+    }
+
+    // MARK: - Проекты (Phase 2)
+    //
+    // Все мутации записей идут через этот стор, а не через ProjectStore:
+    // `recordings` — кэш, который целиком upsert-ится в БД. Если поменять
+    // project_id в обход кэша, следующий save() откатит изменение обратно.
+
+    /// Записи Проекта (или orphan-Записи при `projectID == nil`), новые сверху.
+    func recordings(inProject projectID: UUID?) -> [Recording] {
+        recordings.filter { $0.projectId == projectID }
+    }
+
+    /// Можно ли сейчас переносить запись: пока whisper читает файл, не трогаем его.
+    func canMove(_ recording: Recording) -> Bool {
+        recording.status != .transcribing
+    }
+
+    /// Move to (§7.4 брифа): файл физически переезжает в папку целевого Проекта,
+    /// затем меняется projectId. Если файл не удалось перенести — запись остаётся
+    /// в исходном Проекте, ошибка пробрасывается в UI.
+    func move(_ recording: Recording, to project: Project?) throws {
+        guard let idx = recordings.firstIndex(where: { $0.id == recording.id }) else { return }
+        let current = recordings[idx]
+        guard current.projectId != project?.id else { return }
+        guard canMove(current) else { throw RecordingsStoreError.busyTranscribing }
+
+        let targetDir = try AppSettings.recordingsDirectory(for: project)
+        let result = try fileCoordinator.moveMedia(of: current, to: targetDir)
+
+        var rec = current
+        rec.projectId = project?.id
+        rec.audioFileName = result.audioFileName
+        rec.storageFolderPath = result.storageFolderPath
+        rec.audioBookmark = result.audioBookmark ?? rec.audioBookmark
+        recordings[idx] = rec
+
+        if let project {
+            // Проект «всплывает» в sidebar по recency (§6.2).
+            try? dbQueue.write { db in
+                try db.execute(
+                    sql: "UPDATE project SET updated_at = ? WHERE id = ?",
+                    arguments: [Date(), project.id.uuidString]
+                )
+            }
+        }
+    }
+
+    /// Готовит удаление Проекта (§6.8): либо удаляет его записи вместе с файлами,
+    /// либо переносит их в «Записи» (orphan) — и файлы тоже, потому что папка
+    /// Проекта будет удалена. Сразу пишет в БД, чтобы ON DELETE у project
+    /// не разошёлся с кэшем.
+    func detachRecordings(fromProject projectID: UUID, deleteFiles: Bool) {
+        for rec in recordings(inProject: projectID) {
+            if deleteFiles {
+                delete(rec)
+            } else {
+                do {
+                    try move(rec, to: nil)
+                } catch {
+                    // Файл не переехал (например, идёт транскрипция) — всё равно
+                    // отвязываем от Проекта; bookmark найдёт файл, если он остался.
+                    update(id: rec.id) { $0.projectId = nil }
+                    print("⚠️ move to orphan failed: \(error.localizedDescription)")
+                }
+            }
+        }
+        saveNow()
+    }
+
+    /// Суммарный размер медиа Проекта в байтах — для диалога удаления.
+    func mediaSize(ofProject projectID: UUID) -> Int64 {
+        recordings(inProject: projectID).reduce(0) { sum, rec in
+            guard !rec.audioRemoved else { return sum }
+            if rec.fileSize > 0 { return sum + rec.fileSize }
+            guard let (url, _) = rec.resolveAudioURL(),
+                  let size = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize else { return sum }
+            return sum + Int64(size)
+        }
+    }
+
+    /// Файл записи на диске (для «Показать в Finder»). nil — файла нет.
+    func mediaURL(for recording: Recording) -> URL? {
+        guard !recording.audioRemoved else { return nil }
+        return recording.resolveAudioURL()?.url
+    }
+
+    /// Сбросить отложенное сохранение и записать кэш в БД прямо сейчас.
+    func saveNow() {
+        saveTask?.cancel()
+        saveTask = nil
+        save()
     }
 
     /// Подгоняет имена файлов (.m4a / .mov / .txt) под текущий title.
@@ -451,5 +544,16 @@ final class RecordingsStore {
         f.locale = Locale(identifier: "ru_RU")
         f.dateFormat = "dd.MM.yyyy, HH:mm"
         return f.string(from: date)
+    }
+}
+
+enum RecordingsStoreError: LocalizedError {
+    case busyTranscribing
+
+    var errorDescription: String? {
+        switch self {
+        case .busyTranscribing:
+            return "Запись сейчас расшифровывается. Перенести её можно после окончания расшифровки."
+        }
     }
 }

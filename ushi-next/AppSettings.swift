@@ -233,14 +233,27 @@ enum AppSettings {
     /// External-Проекты используют свой security-scoped путь (Phase 3).
     static func projectRecordingsDirectory(projectId: UUID) throws -> URL {
         let fm = FileManager.default
-        let dir = try metadataDirectory()
-            .appendingPathComponent("Projects", isDirectory: true)
-            .appendingPathComponent(projectId.uuidString, isDirectory: true)
+        let dir = try projectDirectory(projectId: projectId)
             .appendingPathComponent("recordings", isDirectory: true)
         if !fm.fileExists(atPath: dir.path) {
             try fm.createDirectory(at: dir, withIntermediateDirectories: true)
         }
         return dir
+    }
+
+    /// `~/Library/Application Support/UshiNext/Projects/{id}/` — корень managed-Проекта.
+    /// Не создаётся: нужен для «Показать в Finder» и удаления папки вместе с Проектом.
+    static func projectDirectory(projectId: UUID) throws -> URL {
+        try metadataDirectory()
+            .appendingPathComponent("Projects", isDirectory: true)
+            .appendingPathComponent(projectId.uuidString, isDirectory: true)
+    }
+
+    /// Куда физически пишутся записи Проекта (или orphan-Записи при `project == nil`).
+    /// Phase 2: только managed. External-Проекты — Phase 3.
+    static func recordingsDirectory(for project: Project?) throws -> URL {
+        guard let project else { return try recordingsDirectory() }
+        return try projectRecordingsDirectory(projectId: project.id)
     }
 
     private static func resolvedRecordingsDirectory() -> URL? {
