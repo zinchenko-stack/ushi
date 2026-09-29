@@ -84,11 +84,15 @@ final class FileMoverTests: XCTestCase {
 
         var mover = FileMover()
         mover.chunkSize = 64 * 1024
+        // Cancel in the progress callback after actual copying starts. A sleep
+        // races with fast disks and can cancel an already completed operation.
         let task = Task {
-            try await mover.moveFile(at: src, toDirectory: dest, forceCopy: true)
+            try await mover.moveFile(at: src, toDirectory: dest, forceCopy: true) { fraction in
+                if fraction > 0 {
+                    withUnsafeCurrentTask { $0?.cancel() }
+                }
+            }
         }
-        try await Task.sleep(for: .milliseconds(5))
-        task.cancel()
 
         do {
             _ = try await task.value
