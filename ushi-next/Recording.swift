@@ -36,7 +36,9 @@ struct Recording: Identifiable, Codable, Hashable {
     var audioFileName: String
     var transcriptFileName: String?
     var storageFolderPath: String?
-    var status: ProcessingStatus
+    var status: ProcessingStatus {
+        didSet { transcriptStatus = status.transcriptStatus }
+    }
     var audioRemoved: Bool
     var audioBookmark: Data?
     var transcriptBookmark: Data?

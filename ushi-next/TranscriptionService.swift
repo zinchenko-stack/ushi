@@ -154,9 +154,12 @@ struct TranscriptionService {
         let t0 = Date()
         #endif
 
-        let wavURL = audioURL.deletingPathExtension().appendingPathExtension("wav")
+        // Отдельная рабочая папка: WAV на входе и соседние файлы не трогаем.
+        let workDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: workDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: workDir) }
+        let wavURL = workDir.appendingPathComponent("input.wav")
         try await convertToWav(input: audioURL, output: wavURL)
-        defer { try? FileManager.default.removeItem(at: wavURL) }
 
         #if DEBUG
         print("🧠 [transcribe] wav ready in \(String(format: "%.1f", Date().timeIntervalSince(t0)))s")
@@ -168,7 +171,8 @@ struct TranscriptionService {
 
         // outputPrefix управляет тем, КУДА whisper-cli напишет .txt: он добавит ".txt".
         // Кладём prefix в outputDirectory если задан, иначе — рядом с аудио (старое поведение).
-        let baseName = audioURL.deletingPathExtension().lastPathComponent
+        // Имена загруженных файлов могут совпадать в разных проектах.
+        let baseName = UUID().uuidString
         let outputDir = outputDirectory ?? audioURL.deletingLastPathComponent()
         if outputDirectory != nil {
             try? FileManager.default.createDirectory(at: outputDir, withIntermediateDirectories: true)
@@ -305,7 +309,7 @@ struct TranscriptionService {
     }
 }
 
-private final class DataBox: @unchecked Sendable {
+nonisolated private final class DataBox: @unchecked Sendable {
     private var data = Data()
     private let lock = NSLock()
     func append(_ chunk: Data) {
