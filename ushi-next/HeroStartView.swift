@@ -109,9 +109,11 @@ struct HeroStartView: View {
             .disabled(isActive)
 
             if let errorMessage = controller.errorMessage {
+                // Про разрешения — спокойная подсказка: macOS в этот момент сама
+                // показывает запрос, пользователь ничего не сделал не так.
                 Text(errorMessage)
                     .font(.callout)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(controller.errorIsPermissionHint ? Color.secondary : Color.red)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 24)
             }

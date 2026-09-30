@@ -71,7 +71,9 @@ struct RecordingDetailView: View {
             titleSection(for: rec)
 
             HStack(spacing: 12) {
-                Label(rec.createdAt.formatted(date: .abbreviated, time: .shortened),
+                Label(rec.createdAt.formatted(
+                    .dateTime.day().month(.abbreviated).year().hour().minute()
+                        .locale(Locale(identifier: "ru_RU"))),
                       systemImage: "calendar")
                 Label(formatDuration(rec.duration), systemImage: "clock")
                 if rec.audioRemoved {
@@ -156,7 +158,7 @@ struct RecordingDetailView: View {
                 Button {
                     store.retryTranscription(rec)
                 } label: {
-                    actionButtonLabel("Повторить транскрибацию", assetName: "RefreshReverse")
+                    actionButtonLabel("Расшифровать заново", assetName: "RefreshReverse")
                 }
                 .buttonStyle(.bordered)
                 .disabled(!modelManager.isReady)
@@ -230,21 +232,21 @@ struct RecordingDetailView: View {
                 case .pending:
                     statusBlock(
                         modelManager.isReady
-                            ? "Ожидает транскрибации…"
+                            ? "Ожидает расшифровки…"
                             : "Ждёт загрузки модели распознавания…",
                         isError: false,
                         showsProgress: modelManager.isReady,
                         recording: rec
                     )
                 case .transcribing:
-                    statusBlock("Транскрибируется…", isError: false, recording: rec)
+                    statusBlock("Расшифровывается…", isError: false, recording: rec)
                 case .failed:
-                    statusBlock("Не удалось создать транскрипцию", isError: true, recording: rec)
+                    statusBlock("Не удалось расшифровать запись", isError: true, recording: rec)
                 case .done:
                     if let text = transcriptText, !text.isEmpty {
                         TranscriptDialogView(text: text)
                     } else {
-                        Text("Транскрипция недоступна").foregroundStyle(.secondary)
+                        Text("Расшифровка недоступна").foregroundStyle(.secondary)
                     }
                 }
             }
@@ -275,12 +277,12 @@ struct RecordingDetailView: View {
                 Button {
                     store.retryTranscription(rec)
                 } label: {
-                    Label("Повторить транскрибацию", systemImage: "arrow.clockwise")
+                    Label("Расшифровать заново", systemImage: "arrow.clockwise")
                 }
                 .disabled(!modelManager.isReady)
                 .help(modelManager.isReady ? "" : "Доступно после загрузки модели")
             } else if isError {
-                Text("Аудио уже удалено по политике хранения — повторная транскрипция невозможна.")
+                Text("Аудио уже удалено по политике хранения — расшифровать заново не получится.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

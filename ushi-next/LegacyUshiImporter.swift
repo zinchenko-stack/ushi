@@ -92,6 +92,9 @@ enum LegacyUshiImporter {
 
         // Название: авто-имя старого Ushi («Запись от …») — fallback, иначе юзер правил руками.
         rec.titleSource = old.title.hasPrefix("Запись от ") ? .fallback : .manual
+        if rec.titleSource == .fallback {
+            rec.title = RecordingsStore.fallbackTitle(project: nil, date: old.createdAt)
+        }
         return rec
     }
 

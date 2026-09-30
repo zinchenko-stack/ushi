@@ -24,6 +24,9 @@ final class RecordingController {
 
     private(set) var isBusy = false
     private(set) var errorMessage: String?
+    /// errorMessage — не сбой, а подсказка про разрешения (macOS как раз показывает
+    /// свой запрос). UI рисует её спокойно, без красного.
+    private(set) var errorIsPermissionHint = false
     private(set) var lastSavedRecording: Recording?
 
     /// Идёт обратный отсчёт перед стартом (3…2…1). nil — отсчёта нет.
@@ -254,6 +257,7 @@ final class RecordingController {
     private func handle(_ error: Error, alertOnFailure: Bool) {
         let message = (error as NSError).localizedDescription
         errorMessage = message
+        errorIsPermissionHint = error is RecordingControllerError
         if alertOnFailure {
             presentAlert(message: message)
         }
@@ -279,7 +283,7 @@ private enum RecordingControllerError: LocalizedError {
         case .microphonePermissionDenied:
             return "Нет доступа к микрофону. Разреши его в Системных настройках → Конфиденциальность и безопасность → Микрофон."
         case .screenPermissionDenied:
-            return "Нет доступа к записи экрана — без него Ushi не может записывать. Разреши его в Системных настройках → Конфиденциальность и безопасность → Запись экрана и нажми запись ещё раз."
+            return "Для записи экрана нужен доступ. Разреши его в окне macOS (или в Системных настройках → Конфиденциальность и безопасность → Запись экрана) и нажми запись ещё раз."
         }
     }
 }

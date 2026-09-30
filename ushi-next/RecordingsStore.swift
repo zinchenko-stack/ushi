@@ -24,6 +24,7 @@ final class RecordingsStore {
         self.dbQueue = dbQueue ?? AppDatabase.shared
         load()
         recoverStuckRecordings()
+        normalizeLegacyFallbackTitles()
         cleanupOrphanedSummaries()
         migrateTranscriptsToServiceFolder()
         sweepStrayTranscriptsFromMediaFolders()
@@ -425,6 +426,16 @@ final class RecordingsStore {
 
     // MARK: - Recovery
 
+    /// Старые авто-имена «Запись от 29.09.2026, 17:47» (из Ushi и ранних сборок)
+    /// → единый формат «Запись · 29 сент., 17:47». Только нетронутые юзером (.fallback).
+    private func normalizeLegacyFallbackTitles() {
+        let pattern = #"^Запись от \d{2}\.\d{2}\.\d{4}, \d{2}:\d{2}$"#
+        for idx in recordings.indices where recordings[idx].titleSource == .fallback {
+            guard recordings[idx].title.range(of: pattern, options: .regularExpression) != nil else { continue }
+            recordings[idx].title = Self.fallbackTitle(project: nil, date: recordings[idx].createdAt)
+        }
+    }
+
     /// Зависшие в transcribing после краша — переводим в failed.
     /// pending остаются в очереди: они могли ждать загрузки модели.
     private func recoverStuckRecordings() {
@@ -623,7 +634,7 @@ final class RecordingsStore {
     }
 
     /// Fallback-имя до авто-названия (§7.3): «Психолог · 29 сент., 19:40».
-    static func fallbackTitle(project: Project?, date: Date = Date()) -> String {
+    nonisolated static func fallbackTitle(project: Project?, date: Date = Date()) -> String {
         let f = DateFormatter()
         f.locale = Locale(identifier: "ru_RU")
         f.dateFormat = "d MMM, HH:mm"

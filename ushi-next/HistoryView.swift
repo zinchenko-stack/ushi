@@ -362,7 +362,7 @@ private struct RecordingRow: View {
 
     private var statusText: String? {
         switch recording.status {
-        case .pending, .transcribing: return "транскрибируется…"
+        case .pending, .transcribing: return "расшифровывается…"
         case .done:                   return nil
         case .failed:                 return "ошибка"
         }

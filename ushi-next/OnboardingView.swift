@@ -41,7 +41,7 @@ struct OnboardingView: View {
                 manager.cancelDownload()
             }
         } message: {
-            Text("Без модели Ushi не сможет транскрибировать записи.")
+            Text("Без модели Ushi не сможет расшифровывать записи.")
         }
     }
 
