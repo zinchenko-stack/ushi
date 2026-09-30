@@ -103,13 +103,9 @@ struct RecordingPreset: Hashable, Codable, RawRepresentable {
             }
         }
 
-        /// Захват микрофона через ScreenCaptureKit есть только с macOS 15 —
-        /// на 14.x переключатель «Микрофон» не показываем.
-        var isAvailable: Bool {
-            guard self == .microphone else { return true }
-            if #available(macOS 15.0, *) { return true }
-            return false
-        }
+        /// Все источники доступны на любой поддерживаемой macOS: микрофон идёт через
+        /// AVAudioEngine, а не ScreenCaptureKit (там он был только с macOS 15).
+        var isAvailable: Bool { true }
 
         /// Источники, которые можно выбрать на этом Mac.
         static var available: [Source] { allCases.filter(\.isAvailable) }

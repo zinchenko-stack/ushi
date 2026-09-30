@@ -2,16 +2,14 @@
 //  AudioRecorder.swift
 //  ushi
 //
-//  Движок записи созвона через ScreenCaptureKit.
-//  Захватывает СИСТЕМНЫЙ звук (голос собеседника) и МИКРОФОН (твой голос)
-//  одним стримом, сводит их вживую в один моно-AAC. Опционально пишет ещё и
-//  ВИДЕО всего экрана — тогда выход .mov (видео + сведённый звук).
-//
-//  Всё пишется через AVAssetWriter: аудио-вход всегда, видео-вход — по флагу.
-//  Аудио и видео идут по часам одного SCStream, поэтому совпадают по времени.
-//  Захват микрофона требует macOS 15+; на 14.x пишется только система.
-//  Системный звук можно выключить (пресет «Только микрофон») — тогда в файл
-//  идёт только микрофон, SCStream всё равно нужен как источник часов.
+//  Движок записи созвона.
+//  Звук — мимо ScreenCaptureKit, чтобы для аудио не нужен был доступ к экрану:
+//  СИСТЕМНЫЙ звук через Core Audio process tap, МИКРОФОН через AVAudioEngine
+//  (см. AudioSources.swift). Оба сводятся вживую в один моно-AAC.
+//  ВИДЕО экрана (по флагу) — через ScreenCaptureKit, тогда выход .mov.
+//  Все источники идут по часам хоста, поэтому совпадают по времени.
+//  Если пишутся оба источника звука, рядом пишется стерео «голосовая дорожка»:
+//  L = микрофон, R = система — по ней whisper размечает «Я / Собеседник».
 //
 
 import Foundation
@@ -50,6 +48,8 @@ final class AudioRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
     private var recordingActivity: NSObjectProtocol?
     private var isStopping = false
     private var stream: SCStream?
+    private var systemTap: SystemAudioTap?
+    private var microphone: MicrophoneCapture?
     private var writer: RecordingWriter?
     private var currentFileURL: URL?
     private var currentVoiceTrackURL: URL?
@@ -80,56 +80,54 @@ final class AudioRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
                     self.writer = nil
                     self.currentFileURL = nil
                 }
+                stopAudioSources()
                 stream = nil
                 endRecordingActivity()
             }
         }
 
-        // 0. Доступ к микрофону спрашиваем ПЕРВЫМ (до Screen Recording),
-        //    чтобы prompt разрешился заранее и первая же запись писала твой голос.
-        var useMic = false
-        if micEnabled, #available(macOS 15.0, *) {
+        // 0. Доступ к микрофону — до старта, чтобы prompt разрешился заранее
+        //    и первая же запись писала твой голос.
+        let useMic = micEnabled
+        if useMic {
             switch AVCaptureDevice.authorizationStatus(for: .audio) {
             case .authorized:
-                useMic = true
+                break
             case .notDetermined:
-                useMic = await AVCaptureDevice.requestAccess(for: .audio)
+                guard await AVCaptureDevice.requestAccess(for: .audio) else {
+                    throw NSError(domain: "ushi", code: 4, userInfo: [NSLocalizedDescriptionKey:
+                        "Нет доступа к микрофону. Разреши его в Системных настройках → Конфиденциальность и безопасность → Микрофон, либо выключи микрофон, чтобы писать только системный звук."])
+                }
             default:
                 throw NSError(domain: "ushi", code: 4, userInfo: [NSLocalizedDescriptionKey:
-                    "Нет доступа к микрофону. Разреши его в Системных настройках → Конфиденциальность и безопасность → Микрофон, либо выключи микрофон в приложении, чтобы писать только системный звук."])
+                    "Нет доступа к микрофону. Разреши его в Системных настройках → Конфиденциальность и безопасность → Микрофон, либо выключи микрофон, чтобы писать только системный звук."])
             }
         }
 
-        // 1. Список захватываемых дисплеев (триггерит запрос на Screen Recording).
-        let content = try await SCShareableContent.excludingDesktopWindows(
-            false, onScreenWindowsOnly: true
-        )
-        guard let display = content.displays.first else {
-            throw NSError(domain: "ushi", code: 1,
-                userInfo: [NSLocalizedDescriptionKey: "Не найден дисплей для захвата"])
-        }
-
-        let filter = SCContentFilter(display: display, excludingApplications: [], exceptingWindows: [])
-
-        // Без системного звука и без микрофона писать нечего — например, пресет
-        // «Только микрофон» на macOS 14, где захват микрофона недоступен.
         let wantSystemAudio = systemAudioEnabled
         guard wantSystemAudio || useMic else {
             throw NSError(domain: "ushi", code: 5, userInfo: [NSLocalizedDescriptionKey:
-                "Запись только с микрофона доступна на macOS 15 и новее. Выбери «Системный звук + микрофон»."])
+                "Выбери хотя бы один источник звука."])
         }
 
-        let config = SCStreamConfiguration()
-        config.capturesAudio = wantSystemAudio
-        config.excludesCurrentProcessAudio = true
-        config.sampleRate = 48_000
-        config.channelCount = 2
-
-        // Видео всего экрана — по флагу. Без видео держим минимальный кадр 2×2 (нужен SCK).
+        // 1. Экран — только если нужно видео. Звук идёт мимо ScreenCaptureKit,
+        //    поэтому без видео доступ к записи экрана не нужен вовсе.
         let wantVideo = captureVideo
         var videoSize = CGSize(width: 2, height: 2)
         var videoBitrate = 0
+        var screenStream: SCStream?
         if wantVideo {
+            let content = try await SCShareableContent.excludingDesktopWindows(
+                false, onScreenWindowsOnly: true
+            )
+            guard let display = content.displays.first else {
+                throw NSError(domain: "ushi", code: 1,
+                    userInfo: [NSLocalizedDescriptionKey: "Не найден дисплей для захвата"])
+            }
+            let filter = SCContentFilter(display: display, excludingApplications: [], exceptingWindows: [])
+            let config = SCStreamConfiguration()
+            config.capturesAudio = false
+
             // Пресет качества из настроек: пропорциональное уменьшение по высоте.
             let quality = AppSettings.videoQuality()
             let srcW = max(2, display.width)
@@ -150,17 +148,10 @@ final class AudioRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
             config.minimumFrameInterval = CMTime(value: 1, timescale: Int32(quality.fps))
             config.queueDepth = 8
             config.showsCursor = true
-        } else {
-            config.width = 2
-            config.height = 2
-            config.minimumFrameInterval = CMTime(value: 1, timescale: 1)
-            config.queueDepth = 6
-        }
 
-        // Захват микрофона — отдельный поток того же стрима (macOS 15+).
-        if useMic, #available(macOS 15.0, *) {
-            config.captureMicrophone = true
-            // microphoneCaptureDeviceID = nil → системный микрофон по умолчанию.
+            let stream = SCStream(filter: filter, configuration: config, delegate: self)
+            try stream.addStreamOutput(self, type: .screen, sampleHandlerQueue: sampleQueue)
+            screenStream = stream
         }
 
         // 2. Готовим writer (на sampleQueue, чтобы избежать гонок).
@@ -181,21 +172,26 @@ final class AudioRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
             self.writer = writer
         }
 
-        // 3. Создаём поток и подписываемся на нужные типы.
-        let stream = SCStream(filter: filter, configuration: config, delegate: self)
-        if wantSystemAudio {
-            try stream.addStreamOutput(self, type: .audio, sampleHandlerQueue: sampleQueue)
-        }
-        if useMic, #available(macOS 15.0, *) {
-            try stream.addStreamOutput(self, type: .microphone, sampleHandlerQueue: sampleQueue)
-        }
-        if wantVideo {
-            try stream.addStreamOutput(self, type: .screen, sampleHandlerQueue: sampleQueue)
-        }
-        self.stream = stream
-
+        // 3. Запускаем источники. Буферы приходят на sampleQueue, как и раньше.
         beginRecordingActivity()
-        try await stream.startCapture()
+        if wantSystemAudio {
+            let tap = SystemAudioTap()
+            try tap.start(queue: sampleQueue) { [weak self] pcm, pts in
+                self?.receive(pcm, at: pts, source: .system)
+            }
+            systemTap = tap
+        }
+        if useMic {
+            let mic = MicrophoneCapture()
+            try mic.start(queue: sampleQueue) { [weak self] pcm, pts in
+                self?.receive(pcm, at: pts, source: .microphone)
+            }
+            microphone = mic
+        }
+        if let screenStream {
+            self.stream = screenStream
+            try await screenStream.startCapture()
+        }
         started = true
 
         await MainActor.run {
@@ -227,6 +223,9 @@ final class AudioRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
             startDate = nil
             endRecordingActivity()
         }
+        // Сначала глушим источники звука, потом экран — после барьера на sampleQueue
+        // новых буферов не будет.
+        stopAudioSources()
         let stoppingStream = stream
         stream = nil // Delegate errors during an intentional stop must not finalize twice.
         if let stoppingStream {
@@ -274,6 +273,20 @@ final class AudioRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
             FileManager.default.fileExists(atPath: $0.path) ? $0 : nil
         }
         return (url, voiceTrack, duration)
+    }
+
+    // MARK: Звук из Core Audio tap и AVAudioEngine (на sampleQueue)
+
+    private func receive(_ pcm: AVAudioPCMBuffer, at pts: CMTime, source: RecordingWriter.Source) {
+        let rms = writer?.appendAudio(pcm, at: pts, source: source) ?? 0
+        updateLevel(rms: rms, source: source)
+    }
+
+    private func stopAudioSources() {
+        systemTap?.stop()
+        systemTap = nil
+        microphone?.stop()
+        microphone = nil
     }
 
     // MARK: SCStreamOutput — приём буферов (на sampleQueue)
@@ -504,8 +517,15 @@ final class RecordingWriter {
     /// Возвращает RMS этого куска — для индикатора уровня.
     @discardableResult
     func appendAudio(_ sampleBuffer: CMSampleBuffer, source: Source) -> Float {
-        guard let mono = monoSamples(from: sampleBuffer, source: source) else { return 0 }
-        let pts = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+        guard let pcm = pcmBuffer(from: sampleBuffer) else { return 0 }
+        return appendAudio(pcm, at: CMSampleBufferGetPresentationTimeStamp(sampleBuffer), source: source)
+    }
+
+    /// То же для PCM-буфера с временем по часам хоста — так приходят звук из
+    /// Core Audio tap и микрофон из AVAudioEngine.
+    @discardableResult
+    func appendAudio(_ pcm: AVAudioPCMBuffer, at pts: CMTime, source: Source) -> Float {
+        guard let mono = monoSamples(from: pcm, source: source) else { return 0 }
         guard pts.isNumeric else { return 0 }
         ensureAnchor(pts)
         guard let anchor else { return 0 }
@@ -694,7 +714,7 @@ final class RecordingWriter {
 
     // MARK: CMSampleBuffer → mono float32 48k
 
-    private func monoSamples(from sampleBuffer: CMSampleBuffer, source: Source) -> [Float]? {
+    private func pcmBuffer(from sampleBuffer: CMSampleBuffer) -> AVAudioPCMBuffer? {
         guard let fmtDesc = CMSampleBufferGetFormatDescription(sampleBuffer),
               let asbdPtr = CMAudioFormatDescriptionGetStreamBasicDescription(fmtDesc) else { return nil }
         var asbd = asbdPtr.pointee
@@ -708,8 +728,13 @@ final class RecordingWriter {
         let status = CMSampleBufferCopyPCMDataIntoAudioBufferList(
             sampleBuffer, at: 0, frameCount: Int32(frames), into: inBuf.mutableAudioBufferList)
         guard status == noErr else { return nil }
+        return inBuf
+    }
 
-        guard let converter = converter(for: source, from: inFormat) else { return nil }
+    private func monoSamples(from inBuf: AVAudioPCMBuffer, source: Source) -> [Float]? {
+        let inFormat = inBuf.format
+        let frames = inBuf.frameLength
+        guard frames > 0, let converter = converter(for: source, from: inFormat) else { return nil }
 
         let ratio = canonical.sampleRate / inFormat.sampleRate
         let outCap = AVAudioFrameCount(Double(frames) * ratio + 1_024)
@@ -736,12 +761,12 @@ final class RecordingWriter {
     private func converter(for source: Source, from inFormat: AVAudioFormat) -> AVAudioConverter? {
         switch source {
         case .system:
-            if systemConverter == nil {
+            if systemConverter == nil || systemConverter?.inputFormat != inFormat {
                 systemConverter = AVAudioConverter(from: inFormat, to: canonical)
             }
             return systemConverter
         case .microphone:
-            if micConverter == nil {
+            if micConverter == nil || micConverter?.inputFormat != inFormat {
                 micConverter = AVAudioConverter(from: inFormat, to: canonical)
             }
             return micConverter

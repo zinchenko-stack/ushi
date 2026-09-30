@@ -219,14 +219,16 @@ final class RecordingController {
     }
 
     private func ensurePermissionsForCurrentConfiguration() async throws {
-        try ensureScreenRecordingAccess()
+        // Доступ к экрану — только для видео: звук пишется мимо ScreenCaptureKit.
+        if recorder.captureVideo {
+            try ensureScreenRecordingAccess()
+        }
         if recorder.micEnabled {
             try await ensureMicrophoneAccess()
         }
     }
 
-    /// Доступ к записи экрана нужен для любой записи (часы и системный звук идут
-    /// через ScreenCaptureKit). Настройки сами не открываем — системный запрос
+    /// Доступ к записи экрана нужен только для видео экрана. Настройки сами не открываем — системный запрос
     /// macOS уже содержит кнопку «Открыть Системные настройки».
     private func ensureScreenRecordingAccess() throws {
         guard !ScreenRecordingPermission.isGranted else { return }
