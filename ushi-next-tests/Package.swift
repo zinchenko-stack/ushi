@@ -3,7 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "UshiNextCoreTests",
-    platforms: [.macOS(.v14)],
+    platforms: [.macOS("14.6")],
     products: [
         .library(name: "UshiNextCore", targets: ["UshiNextCore"]),
     ],
