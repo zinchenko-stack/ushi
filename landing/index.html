@@ -9,7 +9,9 @@
   <meta property="og:description" content="Записывает звук и экран, превращает в текст с удобным поиском.">
   <meta property="og:type" content="website">
   <meta property="og:image" content="/icon-512.png">
-  <meta name="theme-color" content="#222e3d">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#222e3d">
+  <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#161616">
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
@@ -28,6 +30,30 @@
       --logo-from: #222e3d;
       --logo-to: #171c24;
       --element-inverse: #ffffff;
+    }
+
+    /* Тёмная тема — по системной настройке посетителя. */
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #161616;
+        --container-primary: #232323;
+        --element-primary: #f2f2f2;
+        --element-secondary: #a3a7ab;
+        --element-tertiary: #63676b;
+        --element-accent: #e3e8ef;
+        --logo-from: #33455c;
+        --logo-to: #243142;
+      }
+
+      /* Тёмно-синий квадрат логотипа не сливается с тёмной плашкой. */
+      .pill .logo-square {
+        outline: 1px solid rgba(255, 255, 255, 0.1);
+        outline-offset: -1px;
+      }
+
+      .cta {
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 0 0 1px rgba(255, 255, 255, 0.06);
+      }
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
