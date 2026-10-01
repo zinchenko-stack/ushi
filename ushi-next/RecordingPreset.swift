@@ -95,6 +95,16 @@ struct RecordingPreset: Hashable, Codable, RawRepresentable {
             }
         }
 
+        /// Короткая подпись под кнопкой на экране записи. «Звук Mac», а не просто
+        /// «Звук» — иначе легко спутать с микрофоном.
+        var shortTitle: String {
+            switch self {
+            case .systemAudio: return "Звук Mac"
+            case .microphone:  return "Микрофон"
+            case .screen:      return "Экран"
+            }
+        }
+
         var systemImage: String {
             switch self {
             case .systemAudio: return "speaker.wave.2.fill"

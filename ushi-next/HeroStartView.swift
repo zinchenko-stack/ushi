@@ -76,8 +76,8 @@ struct HeroStartView: View {
                 .buttonStyle(.plain)
                 .disabled(controller.isBusy)
 
-                // Источники — три круглые кнопки-переключателя под кнопкой записи.
-                HStack(spacing: 14) {
+                // Источники — три круглые кнопки-переключателя с подписями.
+                HStack(spacing: 12) {
                     ForEach(RecordingPreset.Source.available, id: \.self) { source in
                         SourceToggleButton(
                             source: source,
@@ -117,8 +117,8 @@ struct HeroStartView: View {
 
             Spacer()
         }
-        // Вся композиция чуть выше середины: заголовок на 24 pt выше, чем был.
-        .padding(.bottom, 36)
+        // Вся композиция чуть выше середины окна.
+        .padding(.bottom, 17)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .overlay(alignment: .bottom) { savedToast }
         .animation(.spring(duration: 0.3), value: savedRecording)
@@ -379,8 +379,8 @@ struct HeroStartView: View {
     }
 }
 
-/// Круглая кнопка-переключатель источника: включена — залита акцентом,
-/// выключена — серая. Название — во всплывающей подсказке.
+/// Круглая кнопка-переключатель источника с подписью снизу, как в Telegram:
+/// включена — залита акцентом, выключена — серая.
 private struct SourceToggleButton: View {
     let source: RecordingPreset.Source
     let isOn: Bool
@@ -389,12 +389,20 @@ private struct SourceToggleButton: View {
 
     var body: some View {
         Button(action: action) {
-            Image(systemName: source.systemImage)
-                .font(.system(size: 17, weight: .medium))
-                .foregroundStyle(isOn ? AppColors.accentGlyph : Color.secondary)
-                .frame(width: 44, height: 44)
-                .background(Circle().fill(isOn ? AppColors.accentFill : Color.secondary.opacity(0.18)))
-                .contentShape(Circle())
+            VStack(spacing: 6) {
+                Image(systemName: source.systemImage)
+                    .font(.system(size: 17, weight: .medium))
+                    .foregroundStyle(isOn ? AppColors.accentGlyph : Color.secondary)
+                    .frame(width: 44, height: 44)
+                    .background(Circle().fill(isOn ? AppColors.accentFill : Color.secondary.opacity(0.18)))
+                Text(source.shortTitle)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .fixedSize()
+            }
+            .frame(width: 64)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .disabled(!isEnabled)
