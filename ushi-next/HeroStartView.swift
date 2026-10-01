@@ -81,9 +81,6 @@ struct HeroStartView: View {
                 }
             }
 
-            Text(statusText)
-                .font(.title3)
-                .foregroundStyle(.secondary)
 
             // Индикатор уровня — заполняется от реального сигнала
             RoundedRectangle(cornerRadius: 4)
@@ -100,17 +97,6 @@ struct HeroStartView: View {
                 }
                 .opacity(controller.isRecording ? 1 : 0.4)
 
-            Button {
-                importAudio()
-            } label: {
-                Label("Загрузить аудио на расшифровку…", systemImage: "square.and.arrow.down")
-                    .foregroundStyle(AppColors.accentText)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .modifier(LinkPointer())
-            .disabled(isActive)
-            .opacity(isActive ? 0.5 : 1)
 
             if let errorMessage = controller.errorMessage {
                 // Про разрешения — спокойная подсказка: macOS в этот момент сама
@@ -129,6 +115,16 @@ struct HeroStartView: View {
         .animation(.spring(duration: 0.3), value: savedRecording)
         // Без заголовка в окне: на экране и так крупное «Начать запись».
         .modifier(HiddenWindowTitle())
+        // Загрузка готового аудио — иконкой справа вверху, как в Claude Code.
+        .toolbar {
+            TrailingToolbarIcon(
+                imageName: "Upload",
+                help: "Загрузить аудио на расшифровку…",
+                isEnabled: !isActive
+            ) {
+                importAudio()
+            }
+        }
         .sheet(isPresented: $isCreatingProject) {
             CreateProjectSheet(projects: projects) { project in
                 targetProjectID = project.id
@@ -245,17 +241,6 @@ struct HeroStartView: View {
         let preset = presetBinding.wrappedValue
         let project = targetProject
         Task { await controller.start(preset: preset, project: project) }
-    }
-
-    private var statusText: String {
-        if controller.isBusy { return "Подождите…" }
-        if controller.isCountingDown { return "Нажмите, чтобы отменить" }
-        if controller.isRecording {
-            if let project = controller.activeProject { return "Идёт запись в «\(project.name)»…" }
-            return "Идёт запись…"
-        }
-        // В покое подсказка не нужна: что нажимать, и так понятно.
-        return " "
     }
 
     private var buttonFill: Color {
@@ -392,13 +377,3 @@ private struct SourceToggleButton: View {
     }
 }
 
-/// Курсор-«ручка» над ссылкой (macOS 15+; на 14 — обычный курсор).
-private struct LinkPointer: ViewModifier {
-    func body(content: Content) -> some View {
-        if #available(macOS 15.0, *) {
-            content.pointerStyle(.link)
-        } else {
-            content
-        }
-    }
-}

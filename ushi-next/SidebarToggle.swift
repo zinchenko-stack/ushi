@@ -56,30 +56,14 @@ private struct SidebarToggleButton: View {
     @Binding var isSidebarVisible: Bool
     let size: CGFloat
 
-    @State private var isHovered = false
-
     var body: some View {
-        Button {
+        ToolbarIconButton(
+            imageName: "PanelLeft",
+            help: isSidebarVisible ? "Скрыть боковую панель (⌃⌘S)" : "Показать боковую панель (⌃⌘S)"
+        ) {
             withAnimation(.easeInOut(duration: 0.2)) { isSidebarVisible.toggle() }
-        } label: {
-            Image("PanelLeft")
-                .resizable()
-                .renderingMode(.template)
-                .scaledToFit()
-                .frame(width: 17, height: 17)
-                .foregroundStyle(isHovered ? Color.primary : Color.secondary)
-                .frame(width: size, height: size)
-                .background(
-                    RoundedRectangle(cornerRadius: 7, style: .continuous)
-                        .fill(Color.primary.opacity(isHovered ? 0.07 : 0))
-                )
-                .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .onHover { isHovered = $0 }
-        .help(isSidebarVisible ? "Скрыть боковую панель (⌃⌘S)" : "Показать боковую панель (⌃⌘S)")
         .keyboardShortcut("s", modifiers: [.control, .command])
-        .accessibilityLabel(isSidebarVisible ? "Скрыть боковую панель" : "Показать боковую панель")
     }
 }
 
@@ -127,5 +111,61 @@ struct HiddenWindowTitle: ViewModifier {
         } else {
             content.navigationTitle("")
         }
+    }
+}
+
+// MARK: - Иконки в панели окна в стиле Claude Code
+
+/// Простая иконка без «пузыря»: серая, при наведении ярче и с лёгкой подложкой.
+struct ToolbarIconButton: View {
+    let imageName: String
+    let help: String
+    var isEnabled = true
+    let action: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(imageName)
+                .resizable()
+                .renderingMode(.template)
+                .scaledToFit()
+                .frame(width: 17, height: 17)
+                .foregroundStyle(isHovered && isEnabled ? Color.primary : Color.secondary)
+                .frame(width: 28, height: 28)
+                .background(
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .fill(Color.primary.opacity(isHovered && isEnabled ? 0.07 : 0))
+                )
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!isEnabled)
+        .opacity(isEnabled ? 1 : 0.4)
+        .onHover { isHovered = $0 }
+        .help(help)
+        .accessibilityLabel(help)
+    }
+}
+
+/// Иконка справа вверху окна (без стеклянной подложки на macOS 26).
+struct TrailingToolbarIcon: ToolbarContent {
+    let imageName: String
+    let help: String
+    var isEnabled = true
+    let action: () -> Void
+
+    var body: some ToolbarContent {
+        if #available(macOS 26.0, *) {
+            ToolbarItem(placement: .primaryAction) { button }
+                .sharedBackgroundVisibility(.hidden)
+        } else {
+            ToolbarItem(placement: .primaryAction) { button }
+        }
+    }
+
+    private var button: some View {
+        ToolbarIconButton(imageName: imageName, help: help, isEnabled: isEnabled, action: action)
     }
 }
