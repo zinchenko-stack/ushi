@@ -106,6 +106,49 @@ final class ProjectsModel {
         return project
     }
 
+    /// Создать Проект с явным выбором папки (окно «Новый проект»):
+    /// - `.insideUshi` — папка внутри приложения;
+    /// - `.newFolder(in:)` — новая папка с названием проекта в выбранном месте;
+    /// - `.existing` — готовая папка; если название другое, папка переименовывается
+    ///   (у проекта в своей папке название и папка всегда совпадают).
+    @discardableResult
+    func create(name: String, preset: RecordingPreset, location: NewProjectLocation) throws -> Project {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { throw ProjectsModelError.emptyName }
+        switch location {
+        case .insideUshi:
+            return try create(name: trimmed, preset: preset)
+        case .newFolder(let parent):
+            let folderName = ProjectFolders.folderName(from: trimmed)
+            guard !folderName.isEmpty else { throw ProjectsModelError.emptyName }
+            let folder = parent.appendingPathComponent(folderName, isDirectory: true)
+            guard !FileManager.default.fileExists(atPath: folder.path) else {
+                throw ProjectsModelError.folderNameTaken(folderName)
+            }
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            return try create(name: folderName, preset: preset, folder: folder)
+        case .existing(let folder):
+            let folderName = ProjectFolders.folderName(from: trimmed)
+            guard !folderName.isEmpty else { throw ProjectsModelError.emptyName }
+            let target = try Self.renameFolder(folder, to: folderName)
+            return try create(name: target.lastPathComponent, preset: preset, folder: target)
+        }
+    }
+
+    /// Переименовать папку на диске. Возвращает её новый адрес (или прежний,
+    /// если имя не изменилось). «лекции» → «Лекции» — та же папка, не «занята».
+    static func renameFolder(_ folder: URL, to folderName: String) throws -> URL {
+        let target = folder.deletingLastPathComponent().appendingPathComponent(folderName, isDirectory: true)
+        guard target.standardizedFileURL != folder.standardizedFileURL else { return folder }
+        let onlyCaseChanged = target.standardizedFileURL.path.lowercased()
+            == folder.standardizedFileURL.path.lowercased()
+        guard onlyCaseChanged || !FileManager.default.fileExists(atPath: target.path) else {
+            throw ProjectsModelError.folderNameTaken(folderName)
+        }
+        try FileManager.default.moveItem(at: folder, to: target)
+        return target
+    }
+
     /// Переименовать Проект. У external-Проекта заодно переименовывается его папка
     /// на диске — название и папка синхронны в обе стороны.
     func rename(_ project: Project, to newName: String) throws {
@@ -116,15 +159,8 @@ final class ProjectsModel {
             let folderName = ProjectFolders.folderName(from: trimmed)
             guard !folderName.isEmpty else { throw ProjectsModelError.emptyName }
             let folder = try ProjectFolders.rootFolder(for: project)
-            let target = folder.deletingLastPathComponent().appendingPathComponent(folderName, isDirectory: true)
-            if target.standardizedFileURL != folder.standardizedFileURL {
-                // «лекции» → «Лекции»: на диске это та же папка, не считаем занятой.
-                let onlyCaseChanged = target.standardizedFileURL.path.lowercased()
-                    == folder.standardizedFileURL.path.lowercased()
-                guard onlyCaseChanged || !FileManager.default.fileExists(atPath: target.path) else {
-                    throw ProjectsModelError.folderNameTaken(folderName)
-                }
-                try FileManager.default.moveItem(at: folder, to: target)
+            let target = try Self.renameFolder(folder, to: folderName)
+            if target != folder {
                 try store.updateStorage(project, ProjectFolders.externalStorage(for: target))
             }
             try store.rename(project, to: folderName)
@@ -191,4 +227,14 @@ enum ProjectsModelError: LocalizedError {
             return "В проекте идёт расшифровка записи. Удалить проект можно после её окончания."
         }
     }
+}
+
+/// Где будет папка нового Проекта (окно «Новый проект»).
+enum NewProjectLocation: Equatable {
+    /// Внутри приложения (Application Support) — managed.
+    case insideUshi
+    /// Новая папка с названием проекта внутри выбранного места.
+    case newFolder(in: URL)
+    /// Готовая папка юзера.
+    case existing(URL)
 }

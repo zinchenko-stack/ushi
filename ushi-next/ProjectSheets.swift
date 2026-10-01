@@ -10,24 +10,29 @@ import SwiftUI
 
 // MARK: - Новый проект
 
-/// Либо вписываем название (проект внутри Ushi), либо выбираем папку — тогда
-/// название берётся из её имени. Что записывать, не спрашиваем: новый проект
-/// стартует с источниками последней записи, дальше запоминает свои.
+/// Название — любое. Отдельно и явно — папка, где будут лежать записи:
+/// новая папка с названием проекта (в Ushi или в выбранном месте) либо готовая
+/// папка (тогда название подставляется из неё; поменяли — папка переименуется).
+/// Что записывать, не спрашиваем: проект стартует с источниками последней записи.
 struct CreateProjectSheet: View {
     let projects: ProjectsModel
     var onCreated: (Project) -> Void
 
     @Environment(\.dismiss) private var dismiss
-    /// Название, вписанное руками. Не теряется, если выбрали и потом убрали папку.
-    @State private var typedName = ""
-    /// Выбранная папка (external-Проект). nil — проект внутри Ushi (managed).
-    @State private var folder: URL?
+    @State private var name = ""
+    @State private var location: NewProjectLocation = .insideUshi
+    /// Название, вписанное до выбора готовой папки — вернём, если от неё откажутся.
+    @State private var nameBeforeExisting: String?
     @State private var errorMessage: String?
     @FocusState private var nameFocused: Bool
 
-    /// Название будущего проекта: имя папки, если она выбрана.
-    private var effectiveName: String {
-        (folder?.lastPathComponent ?? typedName).trimmingCharacters(in: .whitespacesAndNewlines)
+    private var trimmedName: String {
+        name.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Имя, которое получит папка (без «/» и «:»).
+    private var folderName: String {
+        ProjectFolders.folderName(from: trimmedName)
     }
 
     var body: some View {
@@ -35,56 +40,25 @@ struct CreateProjectSheet: View {
             Text("Новый проект")
                 .font(.title2.weight(.semibold))
 
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 6) {
                 Text("Название")
                     .font(.headline)
-
-                if let folder {
-                    TextField("", text: .constant(folder.lastPathComponent))
-                        .textFieldStyle(.roundedBorder)
-                        .disabled(true)
-
-                    HStack(spacing: 6) {
-                        Image(systemName: "folder")
-                            .foregroundStyle(.secondary)
-                        Text(ProjectFolders.displayPath(folder.path))
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                            .foregroundStyle(.secondary)
-                        Spacer(minLength: 4)
-                        Button("Другая…", action: pickFolder)
-                            .buttonStyle(.link)
-                        Button {
-                            self.folder = nil
-                            nameFocused = true
-                        } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundStyle(.secondary)
-                        }
-                        .buttonStyle(.plain)
-                        .help("Не использовать папку — вписать название")
-                    }
-                    .font(.callout)
-
-                    Text("Название проекта = имя папки. Переименуете проект — переименуется и папка.")
+                TextField("Например, «Лекции»", text: $name)
+                    .textFieldStyle(.roundedBorder)
+                    .focused($nameFocused)
+                    .onSubmit(create)
+                if case .existing(let folder) = location,
+                   !folderName.isEmpty, folderName != folder.lastPathComponent {
+                    Text("Папка «\(folder.lastPathComponent)» будет переименована в «\(folderName)».")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                } else {
-                    TextField("Например, «Лекции»", text: $typedName)
-                        .textFieldStyle(.roundedBorder)
-                        .focused($nameFocused)
-                        .onSubmit(create)
-
-                    HStack(spacing: 4) {
-                        Text("или")
-                            .foregroundStyle(.secondary)
-                        Button("выберите папку на Mac…", action: pickFolder)
-                            .buttonStyle(.link)
-                        Text("— записи будут лежать в ней")
-                            .foregroundStyle(.secondary)
-                    }
-                    .font(.callout)
                 }
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Папка")
+                    .font(.headline)
+                folderBox
             }
 
             if let errorMessage {
@@ -99,25 +73,143 @@ struct CreateProjectSheet: View {
                     .keyboardShortcut(.cancelAction)
                 Button("Создать", action: create)
                     .keyboardShortcut(.defaultAction)
-                    .disabled(effectiveName.isEmpty)
+                    .disabled(trimmedName.isEmpty)
             }
         }
         .padding(24)
-        .frame(width: 420)
+        .frame(width: 460)
         .onAppear { nameFocused = true }
     }
 
-    private func pickFolder() {
-        guard let picked = FolderPicker.chooseFolder(message: "Выберите папку, где будут лежать записи проекта") else { return }
-        folder = picked
+    // MARK: Блок «Папка»
+
+    private var folderBox: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: folderIcon)
+                    .font(.title2)
+                    .foregroundStyle(Color.accentColor)
+                    .frame(width: 28)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(folderTitle)
+                        .fontWeight(.medium)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Text(folderSubtitle)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                        .truncationMode(.middle)
+                }
+                Spacer(minLength: 0)
+            }
+
+            HStack(spacing: 8) {
+                Button {
+                    pickParent()
+                } label: {
+                    Label("Создать в другом месте…", systemImage: "folder.badge.plus")
+                }
+                Button {
+                    pickExisting()
+                } label: {
+                    Label("Выбрать готовую…", systemImage: "folder")
+                }
+                if location != .insideUshi {
+                    Button("В Ushi", action: resetToUshi)
+                        .help("Хранить записи внутри приложения")
+                }
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.regular)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color(nsColor: .controlBackgroundColor))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .strokeBorder(Color.primary.opacity(0.12))
+        )
+    }
+
+    private var shownFolderName: String {
+        folderName.isEmpty ? "Название" : folderName
+    }
+
+    private var folderIcon: String {
+        switch location {
+        case .insideUshi, .newFolder: return "folder.badge.plus"
+        case .existing:               return "folder.fill"
+        }
+    }
+
+    private var folderTitle: String {
+        switch location {
+        case .insideUshi:        return "Новая папка «\(shownFolderName)» в Ushi"
+        case .newFolder:         return "Новая папка «\(shownFolderName)»"
+        case .existing(let url): return "Готовая папка «\(url.lastPathComponent)»"
+        }
+    }
+
+    private var folderSubtitle: String {
+        switch location {
+        case .insideUshi:
+            return "Записи хранятся внутри приложения"
+        case .newFolder(let parent):
+            return "Будет создана в \(ProjectFolders.displayPath(parent.path))"
+        case .existing(let url):
+            return ProjectFolders.displayPath(url.path)
+        }
+    }
+
+    // MARK: Действия
+
+    private func pickParent() {
+        guard let parent = FolderPicker.chooseFolder(
+            message: "Где создать папку проекта?",
+            prompt: "Создать здесь"
+        ) else { return }
+        restoreNameIfNeeded()
+        location = .newFolder(in: parent)
         errorMessage = nil
     }
 
+    private func pickExisting() {
+        guard let folder = FolderPicker.chooseFolder(
+            message: "Выберите папку, где будут лежать записи проекта"
+        ) else { return }
+        if nameBeforeExisting == nil { nameBeforeExisting = name }
+        name = folder.lastPathComponent
+        location = .existing(folder)
+        errorMessage = nil
+    }
+
+    private func resetToUshi() {
+        restoreNameIfNeeded()
+        location = .insideUshi
+        errorMessage = nil
+    }
+
+    /// Уходим с готовой папки — возвращаем название, которое юзер вписывал сам.
+    private func restoreNameIfNeeded() {
+        if case .existing = location, let typed = nameBeforeExisting {
+            name = typed
+        }
+        nameBeforeExisting = nil
+    }
+
     private func create() {
-        guard !effectiveName.isEmpty else { return }
+        guard !trimmedName.isEmpty else { return }
         do {
             // Источники — как у последней записи; дальше проект запоминает свои.
-            let project = try projects.create(name: effectiveName, preset: AppState.mostRecentPreset(), folder: folder)
+            let project = try projects.create(
+                name: trimmedName,
+                preset: AppState.mostRecentPreset(),
+                location: location
+            )
             onCreated(project)
             dismiss()
         } catch {

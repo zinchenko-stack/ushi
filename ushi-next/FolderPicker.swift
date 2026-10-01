@@ -11,14 +11,14 @@ import UniformTypeIdentifiers
 
 enum FolderPicker {
     /// Модально показать выбор папки. nil — юзер отменил.
-    static func chooseFolder(message: String) -> URL? {
+    static func chooseFolder(message: String, prompt: String = "Выбрать") -> URL? {
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.canCreateDirectories = true
         panel.allowsMultipleSelection = false
         panel.message = message
-        panel.prompt = "Выбрать"
+        panel.prompt = prompt
         guard panel.runModal() == .OK else { return nil }
         return panel.url
     }
