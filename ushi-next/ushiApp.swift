@@ -49,27 +49,11 @@ struct ushiApp: App {
 
     var body: some Scene {
         Window("Ushi", id: "main") {
-            Group {
-                switch modelManager.state {
-                case .checking:
-                    ProgressView()
-                        .controlSize(.large)
-                        .frame(minWidth: 560, minHeight: 420)
-                case .missing:
-                    OnboardingView(manager: modelManager)
-                case .downloading, .failed:
-                    if modelManager.userDismissedOnboarding {
-                        mainContent
-                    } else {
-                        OnboardingView(manager: modelManager)
-                    }
-                case .ready:
-                    mainContent
-                }
-            }
-            .task {
-                modelManager.checkInstalled()
-                SmartTitleModelManager.shared.restore()
+            if HardwareSupport.isAppleSilicon {
+                appContent
+            } else {
+                // Mac с Intel: расшифровка не заработает — честно говорим и ничего не качаем.
+                UnsupportedMacView()
             }
         }
         .windowResizability(.contentMinSize)
@@ -78,15 +62,42 @@ struct ushiApp: App {
                 Button("Проверить обновления…") {
                     Task { await updateChecker.check() }
                 }
+                .disabled(!HardwareSupport.isAppleSilicon)
             }
         }
 
-        MenuBarExtra {
+        MenuBarExtra(isInserted: .constant(HardwareSupport.isAppleSilicon)) {
             UshiMenuBarView(recordingController: recordingController)
         } label: {
             UshiMenuBarLabel(controller: recordingController)
         }
         .menuBarExtraStyle(.menu)
+    }
+
+    /// Обычное окно: онбординг с моделью расшифровки или основной экран.
+    private var appContent: some View {
+        Group {
+            switch modelManager.state {
+            case .checking:
+                ProgressView()
+                    .controlSize(.large)
+                    .frame(minWidth: 560, minHeight: 420)
+            case .missing:
+                OnboardingView(manager: modelManager)
+            case .downloading, .failed:
+                if modelManager.userDismissedOnboarding {
+                    mainContent
+                } else {
+                    OnboardingView(manager: modelManager)
+                }
+            case .ready:
+                mainContent
+            }
+        }
+        .task {
+            modelManager.checkInstalled()
+            SmartTitleModelManager.shared.restore()
+        }
     }
 
     private var mainContent: some View {
