@@ -629,6 +629,9 @@ enum AppColors {
     /// Claude Code (#042040 / #6CA4EC), в светлой — светло-голубая с синим.
     static let accentFill = pair(dark: 0x042040, light: 0xCBE1F9)
     static let accentGlyph = pair(dark: 0x6CA4EC, light: 0x164E93)
+    /// Точка в кнопке записи: в тёмной теме белая; в светлой белая потерялась бы
+    /// на светло-голубом — там синяя.
+    static let recordDot = pair(dark: 0xFFFFFF, light: 0x164E93)
 
     /// Иконки и подписи в панели окна — цвета Claude Code.
     static let toolbarGlyph = pair(dark: 0xC3C2B7, light: 0x3D3D3A)

@@ -296,7 +296,7 @@ struct HeroStartView: View {
             // Красная точка = универсальный «record» (Voice Memos / QuickTime).
             Image(systemName: "circle.fill")
                 .font(.system(size: 40))
-                .foregroundStyle(AppColors.accentGlyph)
+                .foregroundStyle(AppColors.recordDot)
         }
     }
 
