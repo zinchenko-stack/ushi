@@ -81,7 +81,7 @@ struct UshiMenuBarLabel: View {
 
     var body: some View {
         HStack(spacing: 4) {
-            Image("MenuBarWaveform")
+            Image("MenuBarLogo")
                 .renderingMode(.template)
                 .resizable()
                 .scaledToFit()
