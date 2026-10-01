@@ -77,7 +77,7 @@ struct HeroStartView: View {
                 .disabled(controller.isBusy)
 
                 // Источники — три круглые кнопки-переключателя с подписями.
-                HStack(spacing: 12) {
+                HStack(spacing: 16) {
                     ForEach(RecordingPreset.Source.available, id: \.self) { source in
                         SourceToggleButton(
                             source: source,
@@ -118,7 +118,7 @@ struct HeroStartView: View {
             Spacer()
         }
         // Вся композиция чуть выше середины окна.
-        .padding(.bottom, 17)
+        .padding(.bottom, 15)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .overlay(alignment: .bottom) { savedToast }
         .animation(.spring(duration: 0.3), value: savedRecording)
@@ -389,7 +389,7 @@ private struct SourceToggleButton: View {
 
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 6) {
+            VStack(spacing: 8) {
                 Image(systemName: source.systemImage)
                     .font(.system(size: 17, weight: .medium))
                     .foregroundStyle(isOn ? AppColors.accentGlyph : Color.secondary)
@@ -401,7 +401,7 @@ private struct SourceToggleButton: View {
                     .lineLimit(1)
                     .fixedSize()
             }
-            .frame(width: 64)
+            .frame(width: 72)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
