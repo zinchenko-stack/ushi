@@ -17,6 +17,7 @@ struct HeroStartView: View {
     /// Открыть запись по тапу на тост «Запись сохранена».
     var onOpenRecording: (Recording) -> Void
     @State private var isCreatingProject = false
+    @State private var projectMenu = PopUpMenuAnchor()
 
     @State private var sourceHint: String?
     @State private var hintTask: Task<Void, Never>?
@@ -115,11 +116,12 @@ struct HeroStartView: View {
         .animation(.spring(duration: 0.3), value: savedRecording)
         // Без заголовка в окне: на экране и так крупное «Начать запись».
         .modifier(HiddenWindowTitle())
-        // Загрузка готового аудио — иконкой справа вверху, как в Claude Code.
+        // Загрузка готового аудио — кнопкой справа вверху, как в Claude Code.
         .toolbar {
-            TrailingToolbarIcon(
-                imageName: "Upload",
-                help: "Загрузить аудио на расшифровку…",
+            TrailingToolbarButton(
+                imageName: "Download",
+                title: "Загрузить",
+                help: "Аудио для расшифровки",
                 isEnabled: !isActive
             ) {
                 importAudio()
@@ -157,26 +159,44 @@ struct HeroStartView: View {
         )
     }
 
+    /// Куда пойдёт запись — такой же кнопкой, как «Загрузить»: папка, название
+    /// и стрелка; по клику — список Проектов.
     private var projectChip: some View {
         let shown = isActive ? controller.activeProject : targetProject
-        return Menu {
-            Button("Без проекта") { targetProjectID = nil }
-            if !projects.projects.isEmpty {
-                Divider()
-                ForEach(projects.projects) { project in
-                    Button(project.name) { targetProjectID = project.id }
-                }
+        return ClaudeButton(isEnabled: !isActive, action: { projectMenu.popUp(projectMenuItems) }) {
+            HStack(spacing: 6) {
+                Image("FolderClosed")
+                    .resizable()
+                    .renderingMode(.template)
+                    .scaledToFit()
+                    .frame(width: 16, height: 16)
+                Text(shown?.name ?? "Без проекта")
+                    .font(.system(size: 13))
+                    .lineLimit(1)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 9, weight: .semibold))
             }
-            Divider()
-            Button("Создать проект…") { isCreatingProject = true }
-        } label: {
-            Label(shown?.name ?? "Без проекта", systemImage: shown == nil ? "tray" : "folder")
         }
-        .menuStyle(.button)
-        .buttonStyle(.bordered)
-        .controlSize(.small)
+        .background(PopUpMenuAnchorView(anchor: projectMenu))
         .fixedSize()
-        .disabled(isActive)
+        .accessibilityLabel("Проект: \(shown?.name ?? "Без проекта")")
+    }
+
+    private var projectMenuItems: [PopUpMenuItem] {
+        var items: [PopUpMenuItem] = [
+            .item("Без проекта", isChecked: targetProjectID == nil) { targetProjectID = nil }
+        ]
+        if !projects.projects.isEmpty {
+            items.append(.separator)
+            for project in projects.projects {
+                items.append(.item(project.name, isChecked: project.id == targetProjectID) {
+                    targetProjectID = project.id
+                })
+            }
+        }
+        items.append(.separator)
+        items.append(.item("Создать проект…") { isCreatingProject = true })
+        return items
     }
 
     // MARK: - Загрузка аудио

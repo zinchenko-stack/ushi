@@ -71,9 +71,7 @@ struct SidebarView: View {
             }
             .scrollIndicators(.never)
 
-            Rectangle()
-                .fill(AppColors.divider)
-                .frame(height: 1)
+            HairlineDivider()
 
             SidebarRow(
                 isSelected: selection == .settings,
@@ -623,28 +621,39 @@ private struct IdentifiedMove: Identifiable {
 enum AppColors {
     static let sidebar = adaptive(dark: 0.075, light: 0.955)   // #131313 / #F4F4F4
     static let content = adaptive(dark: 0.094, light: 0.985)   // #181818 / #FBFBFB
-    static let divider = Color.primary.opacity(0.08)
+    /// Разделители — тонкие линии в один пиксель (см. HairlineDivider).
+    static let divider = pair(dark: 0x292929, light: 0xDEDEDE)
 
-    /// Акцент на кнопках (запись, включённые источники). В тёмной теме — как у
-    /// Claude Code: тёмно-синяя подложка #042040 и голубой значок #6CA4EC,
-    /// а не яркий системный синий. В светлой — системный акцент с белым.
-    static let accentFill = Color(nsColor: NSColor(name: nil) { appearance in
-        isDark(appearance) ? NSColor(srgbRed: 0x04 / 255, green: 0x20 / 255, blue: 0x40 / 255, alpha: 1)
-                           : .controlAccentColor
-    })
-    static let accentGlyph = Color(nsColor: NSColor(name: nil) { appearance in
-        isDark(appearance) ? NSColor(srgbRed: 0x6C / 255, green: 0xA4 / 255, blue: 0xEC / 255, alpha: 1)
-                           : .white
-    })
+    /// Акцент на кнопках (запись, включённые источники): приглушённая подложка
+    /// и значок в тон, а не яркий системный синий. В тёмной теме — как у
+    /// Claude Code (#042040 / #6CA4EC), в светлой — светло-голубая с синим.
+    static let accentFill = pair(dark: 0x042040, light: 0xCBE1F9)
+    static let accentGlyph = pair(dark: 0x6CA4EC, light: 0x164E93)
 
-    /// Цвет ссылок: в тёмной теме тот же приглушённый голубой, в светлой — системный.
-    static let accentText = Color(nsColor: NSColor(name: nil) { appearance in
-        isDark(appearance) ? NSColor(srgbRed: 0x6C / 255, green: 0xA4 / 255, blue: 0xEC / 255, alpha: 1)
-                           : .linkColor
-    })
+    /// Иконки и подписи в панели окна — цвета Claude Code.
+    static let toolbarGlyph = pair(dark: 0xC3C2B7, light: 0x3D3D3A)
+    static let toolbarGlyphHover = pair(dark: 0xF0EFEC, light: 0x141413)
+
+    /// Подсказка при наведении: в тёмной теме — как у Claude Code.
+    static let tooltipFill = pair(dark: 0x20201F, light: 0xFFFFFF)
+    static let tooltipBorder = pair(dark: 0x363635, light: 0xDEDDD8)
+    static let tooltipText = pair(dark: 0xF0EFEC, light: 0x141413)
 
     private static func isDark(_ appearance: NSAppearance) -> Bool {
         appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+    }
+
+    /// Цвет для тёмной и светлой темы, в виде 0xRRGGBB.
+    private static func pair(dark: UInt32, light: UInt32) -> Color {
+        Color(nsColor: NSColor(name: nil) { appearance in
+            let rgb = isDark(appearance) ? dark : light
+            return NSColor(
+                srgbRed: CGFloat((rgb >> 16) & 0xFF) / 255,
+                green: CGFloat((rgb >> 8) & 0xFF) / 255,
+                blue: CGFloat(rgb & 0xFF) / 255,
+                alpha: 1
+            )
+        })
     }
 
     private static func adaptive(dark: CGFloat, light: CGFloat) -> Color {
@@ -652,6 +661,21 @@ enum AppColors {
             let isDark = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
             return NSColor(white: isDark ? dark : light, alpha: 1)
         })
+    }
+}
+
+/// Линия в один физический пиксель — как разделители у Claude Code.
+struct HairlineDivider: View {
+    var axis: Axis = .horizontal
+    @Environment(\.displayScale) private var displayScale
+
+    var body: some View {
+        Rectangle()
+            .fill(AppColors.divider)
+            .frame(
+                width: axis == .vertical ? 1 / displayScale : nil,
+                height: axis == .horizontal ? 1 / displayScale : nil
+            )
     }
 }
 

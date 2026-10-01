@@ -137,9 +137,7 @@ struct ContentView: View {
                     .frame(width: SidebarMetrics.width)
                     .background(SidebarBackground().ignoresSafeArea())
                     .overlay(alignment: .trailing) {
-                        Rectangle()
-                            .fill(AppColors.divider)
-                            .frame(width: 1)
+                        HairlineDivider(axis: .vertical)
                             .ignoresSafeArea()
                     }
                     .transition(.move(edge: .leading))
