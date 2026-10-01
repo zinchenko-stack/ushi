@@ -15,6 +15,7 @@ struct ContentView: View {
     @Environment(ModelManager.self) private var modelManager
     @AppStorage("update.dismissedVersion") private var dismissedUpdateVersion = ""
     @AppStorage("legacyImport.offered") private var legacyImportOffered = false
+    @AppStorage("sidebar.visible") private var sidebarVisible = true
     @State private var legacyPendingCount = 0
 
     init(recordingController: RecordingController) {
@@ -124,11 +125,23 @@ struct ContentView: View {
         return lines.joined(separator: "\n")
     }
 
+    /// Сплошная левая колонка во всю высоту окна (как в Claude Code), а не
+    /// плавающая боковая панель macOS. Сворачивается целиком кнопкой у «светофора»
+    /// или ⌃⌘S.
     private var mainView: some View {
-        NavigationSplitView {
-            SidebarView(model: sidebarModel, selection: $selection)
-                .navigationSplitViewColumnWidth(min: 220, ideal: 250, max: 320)
-        } detail: {
+        HStack(spacing: 0) {
+            if sidebarVisible {
+                SidebarView(model: sidebarModel, selection: $selection)
+                    .frame(width: SidebarMetrics.width)
+                    .background(SidebarBackground().ignoresSafeArea())
+                    .overlay(alignment: .trailing) {
+                        Rectangle()
+                            .fill(Color.primary.opacity(0.08))
+                            .frame(width: 1)
+                            .ignoresSafeArea()
+                    }
+                    .transition(.move(edge: .leading))
+            }
             NavigationStack(path: $path) {
                 detail
                     .navigationDestination(for: Recording.self) { rec in
@@ -137,6 +150,18 @@ struct ContentView: View {
             }
             .frame(minWidth: 620, maxWidth: .infinity, maxHeight: .infinity)
         }
+        .toolbar {
+            ToolbarItem(placement: .navigation) {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) { sidebarVisible.toggle() }
+                } label: {
+                    Label("Боковая панель", systemImage: "sidebar.left")
+                }
+                .help(sidebarVisible ? "Скрыть боковую панель (⌃⌘S)" : "Показать боковую панель (⌃⌘S)")
+                .keyboardShortcut("s", modifiers: [.control, .command])
+            }
+        }
+        .modifier(SidebarUnderTitlebar())
         .onChange(of: recordingController.isCreatingProjectFromMenu, initial: true) { _, requested in
             if requested {
                 sidebarModel.startCreatingProject()

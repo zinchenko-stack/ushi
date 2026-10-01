@@ -2,9 +2,11 @@
 //  SidebarView.swift
 //  UshiNext
 //
-//  Sidebar Phase 2 (§6.1–6.3, §6.6–6.7 брифа): кнопка «Начать запись» + chip
-//  пресета, поиск, аккордеон Проектов, секция «Записи», настройки внизу.
-//  Иконки разделов — Mage Icons из Assets.xcassets (16pt, template).
+//  Левая колонка в стиле Claude Code: своя, а не системный список macOS —
+//  компактные строки, единый край, своя подсветка. Иерархия:
+//  «Проекты» (серым) → проект с иконкой папки (открытой, если раскрыт) →
+//  записи под названием проекта. «Записи» без проекта — отдельной секцией.
+//  Внизу под разделителем — «Настройки».
 //
 
 import SwiftUI
@@ -17,66 +19,74 @@ struct SidebarView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            List(selection: $selection) {
-                // В безымянной секции, как остальные пункты: строки вне секций
-                // macOS сдвигает правее, и они не совпадали по краю с «Записями».
-                Section {
-                    // Обычный пункт меню, а не отдельная кнопка: ведёт на hero-экран,
-                    // где стартует запись. Во время записи показывает таймер.
-                    NewRecordingRow(controller: controller)
-                        .padding(.leading, SidebarRowMetrics.topRowsLeadingFix)
-                        .tag(MainSelection.home)
-
-                    // Phase 4 заменит на глобальный поиск; пока ведёт в список всех записей
-                    // с поиском по названию и тексту, чтобы не потерять старую функцию.
-                    SidebarIconRow(title: "Поиск") {
-                        Image(systemName: "magnifyingglass")
+            ScrollView {
+                VStack(alignment: .leading, spacing: SidebarMetrics.rowSpacing) {
+                    // Ведёт на экран «Новая запись»; во время записи — таймер.
+                    SidebarRow(isSelected: selection == .home) {
+                        selection = .home
+                    } content: {
+                        NewRecordingRowContent(controller: controller)
                     }
-                    .padding(.leading, SidebarRowMetrics.topRowsLeadingFix)
-                    .tag(MainSelection.search)
-                }
 
-                Section {
-                    if model.pinnedAndSortedProjects.isEmpty {
-                        Button {
-                            model.startCreatingProject()
-                        } label: {
-                            Label("Создать проект", systemImage: "plus")
-                                .foregroundStyle(.secondary)
+                    // Пока ведёт в список всех записей с поиском по названию и тексту.
+                    SidebarRow(isSelected: selection == .search) {
+                        selection = .search
+                    } content: {
+                        SidebarLabel(title: "Поиск") {
+                            Image(systemName: "magnifyingglass")
                         }
-                        .buttonStyle(.plain)
+                    }
+
+                    SidebarSectionHeader(title: "Проекты") {
+                        SidebarHoverButton(systemImage: "plus", help: "Новый проект") {
+                            model.startCreatingProject()
+                        }
+                    }
+
+                    if model.pinnedAndSortedProjects.isEmpty {
+                        SidebarRow {
+                            model.startCreatingProject()
+                        } content: {
+                            SidebarLabel(title: "Создать проект", isSecondary: true) {
+                                Image(systemName: "plus")
+                            }
+                        }
                     }
                     ForEach(model.pinnedAndSortedProjects) { project in
-                        projectGroup(project)
+                        projectBlock(project)
                     }
-                } header: {
-                    HStack {
-                        Text("Проекты")
-                        Spacer()
-                        Button {
-                            model.startCreatingProject()
-                        } label: {
-                            Image(systemName: "plus")
-                        }
-                        .buttonStyle(.plain)
-                        .help("Новый проект")
-                    }
-                }
 
-                Section("Записи", isExpanded: $model.isInboxExpanded) {
-                    recordingRows(in: nil)
+                    SidebarSectionHeader(
+                        title: "Записи",
+                        isExpanded: $model.isInboxExpanded
+                    ) { EmptyView() }
+
+                    if model.isInboxExpanded {
+                        recordingRows(in: nil)
+                    }
                 }
+                .padding(.horizontal, SidebarMetrics.outerPadding)
+                .padding(.top, 6)
+                .padding(.bottom, 12)
             }
-            .listStyle(.sidebar)
-            // Список обрезается ровно над «Настройками» — строки не наезжают на плашку.
-            .clipped()
+            .scrollIndicators(.never)
 
-            // Настройки прижаты к низу: тот же фон sidebar, без разделителя.
-            SettingsFooterRow(isSelected: selection == .settings) {
+            Divider()
+
+            SidebarRow(isSelected: selection == .settings) {
                 selection = .settings
+            } content: {
+                SidebarLabel(title: "Настройки") {
+                    Image("Bolt")
+                        .resizable()
+                        .renderingMode(.template)
+                        .scaledToFit()
+                        .frame(width: 15, height: 15)
+                }
             }
+            .padding(SidebarMetrics.outerPadding)
         }
-        .navigationTitle("Ushi")
+        .font(.system(size: SidebarMetrics.fontSize))
         // «Новая запись» в sidebar — всегда «Без проекта» (§6.4); проект
         // подставляется, только если пришли через «+» у проекта.
         .onChange(of: selection) { _, newValue in
@@ -138,18 +148,17 @@ struct SidebarView: View {
 
     // MARK: - Проект
 
-    private func projectGroup(_ project: Project) -> some View {
-        DisclosureGroup(isExpanded: Binding(
-            get: { model.isExpanded(project) },
-            set: { model.setExpanded(project, $0) }
-        )) {
-            recordingRows(in: project)
-        } label: {
-            ProjectRow(
+    @ViewBuilder
+    private func projectBlock(_ project: Project) -> some View {
+        let expanded = model.isExpanded(project)
+        let isRenaming = model.renamingProjectID == project.id
+        SidebarRow(action: isRenaming ? nil : { model.setExpanded(project, !expanded) }) {
+            ProjectRowContent(
                 project: project,
+                isExpanded: expanded,
                 isAvailable: model.isAvailable(project),
                 folderPath: model.folderPath(of: project),
-                isRenaming: model.renamingProjectID == project.id,
+                isRenaming: isRenaming,
                 isRecordingHere: controller.isRecording && controller.activeProjectID == project.id,
                 canStart: model.isAvailable(project),
                 onStart: {
@@ -163,7 +172,12 @@ struct SidebarView: View {
             ) {
                 projectMenu(project)
             }
-            .contextMenu { projectMenu(project) }
+        }
+        .contextMenu { projectMenu(project) }
+
+        if expanded {
+            // Записи проекта начинаются ровно под его названием.
+            recordingRows(in: project, indent: SidebarMetrics.iconColumn + SidebarMetrics.iconSpacing)
         }
     }
 
@@ -198,30 +212,38 @@ struct SidebarView: View {
     // MARK: - Записи секции
 
     @ViewBuilder
-    private func recordingRows(in project: Project?) -> some View {
+    private func recordingRows(in project: Project?, indent: CGFloat = 0) -> some View {
         let recent = model.recentRecordings(in: project)
         if recent.isEmpty {
             Text(project == nil ? "Здесь появятся записи без проекта" : "Пока нет записей")
-                .font(.callout)
+                .font(.system(size: SidebarMetrics.smallFontSize))
                 .foregroundStyle(.tertiary)
+                .padding(.leading, SidebarMetrics.rowPadding + indent)
+                .frame(minHeight: SidebarMetrics.rowHeight)
         }
         ForEach(recent) { rec in
-            RecordingRow(
-                recording: rec,
-                isRenaming: model.renamingRecordingID == rec.id,
-                onCommitRename: { model.commitRename(rec, to: $0) },
-                onCancelRename: { model.renamingRecordingID = nil }
-            )
-            .tag(MainSelection.recording(rec.id))
+            let isRenaming = model.renamingRecordingID == rec.id
+            SidebarRow(
+                isSelected: selection == .recording(rec.id),
+                indent: indent,
+                action: isRenaming ? nil : { selection = .recording(rec.id) }
+            ) {
+                RecordingRowContent(
+                    recording: rec,
+                    isRenaming: isRenaming,
+                    onCommitRename: { model.commitRename(rec, to: $0) },
+                    onCancelRename: { model.renamingRecordingID = nil }
+                )
+            }
             .contextMenu { recordingMenu(rec) }
         }
         if model.hasMore(in: project) {
-            Button(model.isShowingAll(project) ? "Показать меньше" : "Показать больше →") {
+            SidebarRow(indent: indent) {
                 model.toggleShowAll(project)
+            } content: {
+                Text(model.isShowingAll(project) ? "Показать меньше" : "Показать больше →")
+                    .foregroundStyle(.secondary)
             }
-            .buttonStyle(.plain)
-            .font(.callout)
-            .foregroundStyle(.secondary)
         }
     }
 
@@ -255,35 +277,152 @@ struct SidebarView: View {
     }
 }
 
-// MARK: - Пункт «Новая запись» (§6.4)
+// MARK: - Размеры
 
-/// Строка sidebar, ведущая на hero-экран. Во время отсчёта и записи —
-/// красная точка, таймер и Проект, куда идёт запись.
-private struct NewRecordingRow: View {
+/// Общие размеры левой колонки: компактно, как в Claude Code.
+enum SidebarMetrics {
+    static let width: CGFloat = 260
+    static let fontSize: CGFloat = 13
+    static let smallFontSize: CGFloat = 11.5
+    /// Высота строки (кликабельная область).
+    static let rowHeight: CGFloat = 28
+    static let rowSpacing: CGFloat = 1
+    /// Отступ подсветки от краёв колонки.
+    static let outerPadding: CGFloat = 8
+    /// Отступ содержимого внутри строки — общий край для иконок и текста.
+    static let rowPadding: CGFloat = 8
+    static let cornerRadius: CGFloat = 7
+    static let iconColumn: CGFloat = 16
+    static let iconSize: CGFloat = 14
+    static let iconSpacing: CGFloat = 8
+    /// Отступ над заголовками секций.
+    static let sectionTopSpacing: CGFloat = 14
+}
+
+// MARK: - Строка
+
+/// Строка левой колонки: подсветка при наведении и выборе, клик по всей строке.
+/// Кнопки внутри («+», «⋯») перехватывают клик сами.
+private struct SidebarRow<Content: View>: View {
+    var isSelected = false
+    var indent: CGFloat = 0
+    var action: (() -> Void)?
+    @ViewBuilder let content: () -> Content
+
+    @State private var isHovered = false
+
+    var body: some View {
+        content()
+            .lineLimit(1)
+            .padding(.leading, SidebarMetrics.rowPadding + indent)
+            .padding(.trailing, SidebarMetrics.rowPadding)
+            .frame(maxWidth: .infinity, minHeight: SidebarMetrics.rowHeight, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: SidebarMetrics.cornerRadius)
+                    .fill(Color.primary.opacity(isSelected ? 0.09 : (isHovered && action != nil ? 0.05 : 0)))
+            )
+            .contentShape(RoundedRectangle(cornerRadius: SidebarMetrics.cornerRadius))
+            .onTapGesture { action?() }
+            .onHover { isHovered = $0 }
+    }
+}
+
+/// «иконка + текст» с иконкой в колонке фиксированной ширины — общий край.
+private struct SidebarLabel<Icon: View>: View {
+    let title: String
+    var isSecondary = false
+    @ViewBuilder let icon: () -> Icon
+
+    var body: some View {
+        HStack(spacing: SidebarMetrics.iconSpacing) {
+            icon()
+                .font(.system(size: SidebarMetrics.iconSize))
+                .frame(width: SidebarMetrics.iconColumn)
+            Text(title)
+        }
+        .foregroundStyle(isSecondary ? Color.secondary : Color.primary)
+    }
+}
+
+/// Заголовок секции серым. С `isExpanded` — сворачивается кликом (стрелка при наведении).
+private struct SidebarSectionHeader<Trailing: View>: View {
+    let title: String
+    var isExpanded: Binding<Bool>?
+    @ViewBuilder let trailing: () -> Trailing
+
+    @State private var isHovered = false
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Text(title)
+                .foregroundStyle(.secondary)
+            if let isExpanded, isHovered {
+                Image(systemName: isExpanded.wrappedValue ? "chevron.down" : "chevron.right")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(.tertiary)
+            }
+            Spacer(minLength: 4)
+            if isHovered { trailing() }
+        }
+        .padding(.horizontal, SidebarMetrics.rowPadding)
+        .frame(minHeight: 24)
+        .padding(.top, SidebarMetrics.sectionTopSpacing)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            guard let isExpanded else { return }
+            withAnimation(.easeInOut(duration: 0.15)) { isExpanded.wrappedValue.toggle() }
+        }
+        .onHover { isHovered = $0 }
+    }
+}
+
+/// Маленькая кнопка-иконка в строке (видна при наведении).
+private struct SidebarHoverButton: View {
+    let systemImage: String
+    let help: String
+    var isEnabled = true
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(isEnabled ? Color.secondary : Color.secondary.opacity(0.4))
+                .frame(width: 18, height: 18)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!isEnabled)
+        .help(help)
+    }
+}
+
+// MARK: - «Новая запись» (§6.4)
+
+/// Плюс в кружке; во время отсчёта и записи — красная точка, таймер и Проект.
+private struct NewRecordingRowContent: View {
     let controller: RecordingController
 
     var body: some View {
-        HStack(spacing: SidebarRowMetrics.spacing) {
-            Image(systemName: controller.isRecording ? "record.circle.fill" : "record.circle")
+        HStack(spacing: SidebarMetrics.iconSpacing) {
+            Image(systemName: controller.isRecording ? "record.circle.fill" : "plus.circle")
+                .font(.system(size: SidebarMetrics.iconSize + 1))
                 .foregroundStyle(controller.isRecording ? Color.red : Color.primary)
-                .frame(width: SidebarRowMetrics.iconWidth)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(controller.isRecording ? "Идёт запись" : "Новая запись")
-                if controller.isRecording || controller.isCountingDown {
-                    Text(controller.activeProject?.name ?? "Записи")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
+                .frame(width: SidebarMetrics.iconColumn)
+            Text(controller.isRecording ? "Идёт запись" : "Новая запись")
+            if controller.isRecording || controller.isCountingDown {
+                Text(controller.activeProject?.name ?? "Записи")
+                    .font(.system(size: SidebarMetrics.smallFontSize))
+                    .foregroundStyle(.secondary)
             }
             Spacer(minLength: 4)
             if let cd = controller.countdown {
                 Text("\(cd)")
-                    .font(.callout.monospacedDigit())
+                    .font(.system(size: SidebarMetrics.smallFontSize).monospacedDigit())
                     .foregroundStyle(.secondary)
             } else if controller.isRecording {
                 Text(formatTime(controller.recorder.elapsed))
-                    .font(.callout.monospacedDigit())
+                    .font(.system(size: SidebarMetrics.smallFontSize).monospacedDigit())
                     .foregroundStyle(.red)
             }
         }
@@ -307,8 +446,9 @@ extension Binding where Value == RecordingPreset {
 
 // MARK: - Строка Проекта
 
-private struct ProjectRow<MenuContent: View>: View {
+private struct ProjectRowContent<MenuContent: View>: View {
     let project: Project
+    let isExpanded: Bool
     /// false — папка external-Проекта пропала (degraded state, §7.6).
     let isAvailable: Bool
     /// Путь своей папки — в подсказке при наведении. nil — папка внутри Ushi.
@@ -323,18 +463,6 @@ private struct ProjectRow<MenuContent: View>: View {
 
     @State private var isHovered = false
 
-    private var iconName: String {
-        if isRecordingHere { return "record.circle.fill" }
-        if !isAvailable { return "exclamationmark.triangle.fill" }
-        return folderPath == nil ? "folder" : "folder.badge.person.crop"
-    }
-
-    private var iconColor: Color {
-        if isRecordingHere { return .red }
-        if !isAvailable { return .yellow }
-        return .secondary
-    }
-
     private var helpText: String {
         if !isAvailable {
             return "Папка проекта недоступна. Правый клик → «Подключить заново…»"
@@ -343,20 +471,18 @@ private struct ProjectRow<MenuContent: View>: View {
     }
 
     var body: some View {
-        HStack(spacing: 6) {
-            Image(systemName: iconName)
-                .foregroundStyle(iconColor)
-                .frame(width: 16)
+        HStack(spacing: SidebarMetrics.iconSpacing) {
+            icon
+                .frame(width: SidebarMetrics.iconColumn)
 
             if isRenaming {
                 InlineRenameField(initial: project.name, onCommit: onCommitRename, onCancel: onCancelRename)
             } else {
                 Text(project.name)
-                    .lineLimit(1)
                     .foregroundStyle(isAvailable ? Color.primary : Color.secondary)
                 if project.isPinned {
                     Image(systemName: "pin.fill")
-                        .font(.caption2)
+                        .font(.system(size: 9))
                         .foregroundStyle(.tertiary)
                 }
             }
@@ -364,36 +490,50 @@ private struct ProjectRow<MenuContent: View>: View {
             Spacer(minLength: 4)
 
             if isHovered && !isRenaming {
-                Button(action: onStart) {
-                    Image(systemName: "plus")
-                        .foregroundStyle(canStart ? Color.primary : Color.secondary)
-                }
-                .buttonStyle(.plain)
-                .disabled(!canStart)
-                .help("Новая запись в «\(project.name)»")
-
+                SidebarHoverButton(systemImage: "plus", help: "Новая запись в «\(project.name)»",
+                                   isEnabled: canStart, action: onStart)
                 Menu {
                     menu()
                 } label: {
                     Image(systemName: "ellipsis")
-                        .symbolRenderingMode(.monochrome)
-                        .foregroundStyle(Color.primary)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(Color.secondary)
                 }
-                .tint(.primary)
                 .menuStyle(.borderlessButton)
                 .menuIndicator(.hidden)
                 .fixedSize()
             }
         }
-        .contentShape(Rectangle())
         .onHover { isHovered = $0 }
         .help(helpText)
+    }
+
+    /// Открытая папка — проект раскрыт, закрытая — свёрнут. Запись идёт — красная
+    /// точка; папка пропала — жёлтый треугольник.
+    @ViewBuilder
+    private var icon: some View {
+        if isRecordingHere {
+            Image(systemName: "record.circle.fill")
+                .font(.system(size: SidebarMetrics.iconSize))
+                .foregroundStyle(.red)
+        } else if !isAvailable {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: SidebarMetrics.iconSize - 1))
+                .foregroundStyle(.yellow)
+        } else {
+            Image(isExpanded ? "FolderOpen" : "FolderClosed")
+                .resizable()
+                .renderingMode(.template)
+                .scaledToFit()
+                .frame(width: 15, height: 15)
+                .foregroundStyle(.secondary)
+        }
     }
 }
 
 // MARK: - Строка записи
 
-private struct RecordingRow: View {
+private struct RecordingRowContent: View {
     let recording: Recording
     let isRenaming: Bool
     let onCommitRename: (String) -> Void
@@ -405,15 +545,14 @@ private struct RecordingRow: View {
                 InlineRenameField(initial: recording.title, onCommit: onCommitRename, onCancel: onCancelRename)
             } else {
                 Text(recording.title)
-                    .lineLimit(1)
                 Spacer(minLength: 4)
                 if recording.status == .transcribing {
                     ProgressView()
                         .controlSize(.mini)
                 }
                 Text(RelativeTime.short(since: recording.createdAt))
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: SidebarMetrics.smallFontSize).monospacedDigit())
+                    .foregroundStyle(.tertiary)
             }
         }
     }
@@ -446,49 +585,6 @@ struct InlineRenameField: View {
     }
 }
 
-/// Строка sidebar с фиксированным размером иконки 16pt (Label по умолчанию
-/// масштабирует иконку с шрифтом, у Mage SVG это даёт слишком крупный значок).
-private struct SidebarAssetRow: View {
-    let title: String
-    let imageName: String
-
-    var body: some View {
-        SidebarIconRow(title: title) {
-            Image(imageName)
-                .resizable()
-                .renderingMode(.template)
-                .scaledToFit()
-                .frame(width: 16, height: 16)
-        }
-    }
-}
-
-/// Строка sidebar «иконка + текст» с явной колонкой под иконку — как у строк
-/// проектов. Стандартный Label в sidebar отводит иконке более широкое поле,
-/// и такие строки начинались правее папок и записей.
-private enum SidebarRowMetrics {
-    /// Колонка под иконку и отступ до текста — как у строк проектов (ProjectRow).
-    static let iconWidth: CGFloat = 16
-    static let spacing: CGFloat = 6
-    /// Строки вне раскрывающихся разделов («Новая запись», «Поиск») macOS
-    /// ставит правее строк проектов и записей (~5.5 pt). Возвращаем на общий край.
-    static let topRowsLeadingFix: CGFloat = -5.5
-}
-
-private struct SidebarIconRow<Icon: View>: View {
-
-    let title: String
-    @ViewBuilder let icon: () -> Icon
-
-    var body: some View {
-        HStack(spacing: SidebarRowMetrics.spacing) {
-            icon()
-                .frame(width: SidebarRowMetrics.iconWidth)
-            Text(title)
-        }
-    }
-}
-
 private func formatTime(_ t: TimeInterval) -> String {
     let total = Int(t)
     let h = total / 3600
@@ -506,28 +602,25 @@ private struct IdentifiedMove: Identifiable {
     var id: UUID { progress.recordingID }
 }
 
-// MARK: - Плашка «Настройки» внизу
+// MARK: - Фон колонки
 
-/// Строка «Настройки», закреплённая под списком. Фон не свой — тот же материал
-/// sidebar, поэтому цвет не отличается; выделение как у строк списка.
-private struct SettingsFooterRow: View {
-    let isSelected: Bool
-    let action: () -> Void
+/// Фон левой колонки: чуть темнее основного окна, как боковая панель Claude Code.
+struct SidebarBackground: View {
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        Button(action: action) {
-            SidebarAssetRow(title: "Настройки", imageName: "Bolt")
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 6)
-                .background(
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(isSelected ? Color.primary.opacity(0.1) : Color.clear)
-                )
-                .contentShape(Rectangle())
+        Color(nsColor: .windowBackgroundColor)
+            .overlay(Color.black.opacity(colorScheme == .dark ? 0.18 : 0.04))
+    }
+}
+
+/// Колонка тянется под заголовок окна: фон панели инструментов прозрачный (macOS 15+).
+struct SidebarUnderTitlebar: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(macOS 15.0, *) {
+            content.toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
+        } else {
+            content
         }
-        .buttonStyle(.plain)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
     }
 }
