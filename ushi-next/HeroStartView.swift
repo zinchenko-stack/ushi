@@ -35,11 +35,8 @@ struct HeroStartView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Spacer()
-
-            // Что и куда записываем: заголовок и Проект — одним блоком,
-            // отдельно от кнопки записи.
-            VStack(spacing: 24) {
+            // Что и куда записываем: заголовок и Проект — одним блоком над кнопкой.
+            VStack(spacing: 20) {
                 Group {
                     if let cd = controller.countdown {
                         Text("\(cd)")
@@ -61,21 +58,24 @@ struct HeroStartView: View {
                 projectChip
             }
             .padding(.bottom, 44)
+            .frame(maxHeight: .infinity, alignment: .bottom)
 
-            // Сама запись: кнопка, источники, уровень.
-            VStack(spacing: 28) {
-                Button(action: handleTap) {
-                    ZStack {
-                        Circle()
-                            .fill(buttonFill)
-                            .frame(width: 120, height: 120)
-                        buttonGlyph
-                    }
-                    .opacity(controller.isBusy ? 0.5 : 1)
+            // Кнопка записи — посередине и на месте: не уезжает из-под курсора,
+            // когда заголовок сменяется таймером или внизу появляется ошибка.
+            Button(action: handleTap) {
+                ZStack {
+                    Circle()
+                        .fill(buttonFill)
+                        .frame(width: 120, height: 120)
+                    buttonGlyph
                 }
-                .buttonStyle(.plain)
-                .disabled(controller.isBusy)
+                .opacity(controller.isBusy ? 0.5 : 1)
+            }
+            .buttonStyle(.plain)
+            .disabled(controller.isBusy)
 
+            // Под кнопкой: источники и уровень сигнала.
+            VStack(spacing: 28) {
                 // Источники — три круглые кнопки-переключателя с подписями.
                 HStack(spacing: 16) {
                     ForEach(RecordingPreset.Source.available, id: \.self) { source in
@@ -114,11 +114,11 @@ struct HeroStartView: View {
                         .padding(.horizontal, 24)
                 }
             }
-
-            Spacer()
+            .padding(.top, 40)
+            .frame(maxHeight: .infinity, alignment: .top)
         }
-        // Вся композиция чуть выше середины окна.
-        .padding(.bottom, 15)
+        // Кнопка записи чуть выше середины окна.
+        .offset(y: -3)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .overlay(alignment: .bottom) { savedToast }
         .animation(.spring(duration: 0.3), value: savedRecording)
