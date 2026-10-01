@@ -104,9 +104,13 @@ struct HeroStartView: View {
                 importAudio()
             } label: {
                 Label("Загрузить аудио на расшифровку…", systemImage: "square.and.arrow.down")
+                    .foregroundStyle(AppColors.accentText)
+                    .contentShape(Rectangle())
             }
-            .buttonStyle(.link)
+            .buttonStyle(.plain)
+            .modifier(LinkPointer())
             .disabled(isActive)
+            .opacity(isActive ? 0.5 : 1)
 
             if let errorMessage = controller.errorMessage {
                 // Про разрешения — спокойная подсказка: macOS в этот момент сама
@@ -250,7 +254,8 @@ struct HeroStartView: View {
             if let project = controller.activeProject { return "Идёт запись в «\(project.name)»…" }
             return "Идёт запись…"
         }
-        return "Нажмите, чтобы начать"
+        // В покое подсказка не нужна: что нажимать, и так понятно.
+        return " "
     }
 
     private var buttonFill: Color {
@@ -384,5 +389,16 @@ private struct SourceToggleButton: View {
         .help(isOn ? "\(source.title): включено" : "\(source.title): выключено")
         .accessibilityLabel(source.title)
         .accessibilityValue(isOn ? "включено" : "выключено")
+    }
+}
+
+/// Курсор-«ручка» над ссылкой (macOS 15+; на 14 — обычный курсор).
+private struct LinkPointer: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(macOS 15.0, *) {
+            content.pointerStyle(.link)
+        } else {
+            content
+        }
     }
 }

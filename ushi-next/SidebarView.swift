@@ -637,6 +637,12 @@ enum AppColors {
                            : .white
     })
 
+    /// Цвет ссылок: в тёмной теме тот же приглушённый голубой, в светлой — системный.
+    static let accentText = Color(nsColor: NSColor(name: nil) { appearance in
+        isDark(appearance) ? NSColor(srgbRed: 0x6C / 255, green: 0xA4 / 255, blue: 0xEC / 255, alpha: 1)
+                           : .linkColor
+    })
+
     private static func isDark(_ appearance: NSAppearance) -> Bool {
         appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
     }
