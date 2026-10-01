@@ -89,7 +89,8 @@ struct HeroStartView: View {
                     }
                 }
 
-                // Индикатор уровня — заполняется от реального сигнала
+                // Индикатор уровня — заполняется от реального сигнала. Виден только
+                // во время записи; место под ним остаётся, чтобы ничего не прыгало.
                 RoundedRectangle(cornerRadius: 4)
                     .fill(.quaternary)
                     .frame(width: 240, height: 8)
@@ -102,7 +103,9 @@ struct HeroStartView: View {
                         }
                         .frame(height: 8)
                     }
-                    .opacity(controller.isRecording ? 1 : 0.4)
+                    .opacity(controller.isRecording ? 1 : 0)
+                    .animation(.easeInOut(duration: 0.2), value: controller.isRecording)
+                    .accessibilityHidden(!controller.isRecording)
 
                 if let errorMessage = controller.errorMessage {
                     // Про разрешения — спокойная подсказка: macOS в этот момент сама
