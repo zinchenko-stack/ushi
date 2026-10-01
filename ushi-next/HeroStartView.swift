@@ -34,83 +34,91 @@ struct HeroStartView: View {
     private var targetProject: Project? { projects.project(id: targetProjectID) }
 
     var body: some View {
-        VStack(spacing: 28) {
+        VStack(spacing: 0) {
             Spacer()
 
-            Group {
-                if let cd = controller.countdown {
-                    Text("\(cd)")
-                        .foregroundStyle(Color.accentColor)
-                } else if controller.isRecording {
-                    Text(formatTime(recorder.elapsed))
-                        .foregroundStyle(.primary)
-                } else {
-                    Text("Начать запись")
-                        .foregroundStyle(.primary)
-                }
-            }
-            .font(controller.isRecording || controller.isCountingDown
-                  ? .system(size: 80, weight: .medium, design: .rounded).monospacedDigit()
-                  : .system(size: 40, weight: .semibold, design: .rounded))
-            .contentTransition(.numericText())
-            .animation(.easeInOut(duration: 0.15), value: controller.countdown)
-
-            projectChip
-
-            Button(action: handleTap) {
-                ZStack {
-                    Circle()
-                        .fill(buttonFill)
-                        .frame(width: 120, height: 120)
-                    buttonGlyph
-                }
-                .opacity(controller.isBusy ? 0.5 : 1)
-            }
-            .buttonStyle(.plain)
-            .disabled(controller.isBusy)
-
-            // Источники — три круглые кнопки-переключателя под кнопкой записи.
-            HStack(spacing: 14) {
-                ForEach(RecordingPreset.Source.available, id: \.self) { source in
-                    SourceToggleButton(
-                        source: source,
-                        isOn: presetBinding.wrappedValue.contains(source),
-                        isEnabled: !isActive
-                    ) {
-                        toggleSource(source)
+            // Что и куда записываем: заголовок и Проект — одним блоком,
+            // отдельно от кнопки записи.
+            VStack(spacing: 24) {
+                Group {
+                    if let cd = controller.countdown {
+                        Text("\(cd)")
+                            .foregroundStyle(Color.accentColor)
+                    } else if controller.isRecording {
+                        Text(formatTime(recorder.elapsed))
+                            .foregroundStyle(.primary)
+                    } else {
+                        Text("Начать запись")
+                            .foregroundStyle(.primary)
                     }
                 }
+                .font(controller.isRecording || controller.isCountingDown
+                      ? .system(size: 80, weight: .medium, design: .rounded).monospacedDigit()
+                      : .system(size: 36, weight: .semibold, design: .rounded))
+                .contentTransition(.numericText())
+                .animation(.easeInOut(duration: 0.15), value: controller.countdown)
+
+                projectChip
             }
+            .padding(.bottom, 44)
 
-
-            // Индикатор уровня — заполняется от реального сигнала
-            RoundedRectangle(cornerRadius: 4)
-                .fill(.quaternary)
-                .frame(width: 240, height: 8)
-                .overlay(alignment: .leading) {
-                    GeometryReader { geo in
-                        RoundedRectangle(cornerRadius: 4)
-                            .fill(levelColor)
-                            .frame(width: geo.size.width * CGFloat(recorder.level))
-                            .animation(.easeOut(duration: 0.1), value: recorder.level)
+            // Сама запись: кнопка, источники, уровень.
+            VStack(spacing: 28) {
+                Button(action: handleTap) {
+                    ZStack {
+                        Circle()
+                            .fill(buttonFill)
+                            .frame(width: 120, height: 120)
+                        buttonGlyph
                     }
-                    .frame(height: 8)
+                    .opacity(controller.isBusy ? 0.5 : 1)
                 }
-                .opacity(controller.isRecording ? 1 : 0.4)
+                .buttonStyle(.plain)
+                .disabled(controller.isBusy)
 
+                // Источники — три круглые кнопки-переключателя под кнопкой записи.
+                HStack(spacing: 14) {
+                    ForEach(RecordingPreset.Source.available, id: \.self) { source in
+                        SourceToggleButton(
+                            source: source,
+                            isOn: presetBinding.wrappedValue.contains(source),
+                            isEnabled: !isActive
+                        ) {
+                            toggleSource(source)
+                        }
+                    }
+                }
 
-            if let errorMessage = controller.errorMessage {
-                // Про разрешения — спокойная подсказка: macOS в этот момент сама
-                // показывает запрос, пользователь ничего не сделал не так.
-                Text(errorMessage)
-                    .font(.callout)
-                    .foregroundStyle(controller.errorIsPermissionHint ? Color.secondary : Color.red)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 24)
+                // Индикатор уровня — заполняется от реального сигнала
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(.quaternary)
+                    .frame(width: 240, height: 8)
+                    .overlay(alignment: .leading) {
+                        GeometryReader { geo in
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(levelColor)
+                                .frame(width: geo.size.width * CGFloat(recorder.level))
+                                .animation(.easeOut(duration: 0.1), value: recorder.level)
+                        }
+                        .frame(height: 8)
+                    }
+                    .opacity(controller.isRecording ? 1 : 0.4)
+
+                if let errorMessage = controller.errorMessage {
+                    // Про разрешения — спокойная подсказка: macOS в этот момент сама
+                    // показывает запрос, пользователь ничего не сделал не так.
+                    Text(errorMessage)
+                        .font(.callout)
+                        .foregroundStyle(controller.errorIsPermissionHint ? Color.secondary : Color.red)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 24)
+                }
             }
 
             Spacer()
         }
+        // Вся композиция чуть выше середины: заголовок на 24 pt выше, чем был.
+        .padding(.bottom, 36)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .overlay(alignment: .bottom) { savedToast }
         .animation(.spring(duration: 0.3), value: savedRecording)
