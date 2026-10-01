@@ -625,6 +625,22 @@ enum AppColors {
     static let content = adaptive(dark: 0.094, light: 0.985)   // #181818 / #FBFBFB
     static let divider = Color.primary.opacity(0.08)
 
+    /// Акцент на кнопках (запись, включённые источники). В тёмной теме — как у
+    /// Claude Code: тёмно-синяя подложка #042040 и голубой значок #6CA4EC,
+    /// а не яркий системный синий. В светлой — системный акцент с белым.
+    static let accentFill = Color(nsColor: NSColor(name: nil) { appearance in
+        isDark(appearance) ? NSColor(srgbRed: 0x04 / 255, green: 0x20 / 255, blue: 0x40 / 255, alpha: 1)
+                           : .controlAccentColor
+    })
+    static let accentGlyph = Color(nsColor: NSColor(name: nil) { appearance in
+        isDark(appearance) ? NSColor(srgbRed: 0x6C / 255, green: 0xA4 / 255, blue: 0xEC / 255, alpha: 1)
+                           : .white
+    })
+
+    private static func isDark(_ appearance: NSAppearance) -> Bool {
+        appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+    }
+
     private static func adaptive(dark: CGFloat, light: CGFloat) -> Color {
         Color(nsColor: NSColor(name: nil) { appearance in
             let isDark = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua

@@ -256,7 +256,7 @@ struct HeroStartView: View {
     private var buttonFill: Color {
         if controller.isRecording { return .red }
         if controller.isCountingDown { return .secondary.opacity(0.6) }
-        return .accentColor
+        return AppColors.accentFill
     }
 
     @ViewBuilder
@@ -275,7 +275,7 @@ struct HeroStartView: View {
             // Красная точка = универсальный «record» (Voice Memos / QuickTime).
             Image(systemName: "circle.fill")
                 .font(.system(size: 40))
-                .foregroundStyle(.white)
+                .foregroundStyle(AppColors.accentGlyph)
         }
     }
 
@@ -373,9 +373,9 @@ private struct SourceToggleButton: View {
         Button(action: action) {
             Image(systemName: source.systemImage)
                 .font(.system(size: 17, weight: .medium))
-                .foregroundStyle(isOn ? Color.white : Color.secondary)
+                .foregroundStyle(isOn ? AppColors.accentGlyph : Color.secondary)
                 .frame(width: 44, height: 44)
-                .background(Circle().fill(isOn ? Color.accentColor : Color.secondary.opacity(0.18)))
+                .background(Circle().fill(isOn ? AppColors.accentFill : Color.secondary.opacity(0.18)))
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
