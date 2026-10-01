@@ -123,7 +123,8 @@ struct HeroStartView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .overlay(alignment: .bottom) { savedToast }
         .animation(.spring(duration: 0.3), value: savedRecording)
-        .navigationTitle("Новая запись")
+        // Без заголовка в окне: на экране и так крупное «Начать запись».
+        .modifier(HiddenWindowTitle())
         .sheet(isPresented: $isCreatingProject) {
             CreateProjectSheet(projects: projects) { project in
                 targetProjectID = project.id

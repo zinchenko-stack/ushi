@@ -73,7 +73,11 @@ struct SidebarView: View {
 
             Divider()
 
-            SidebarRow(isSelected: selection == .settings) {
+            SidebarRow(
+                isSelected: selection == .settings,
+                cornerRadius: SidebarMetrics.footerCornerRadius,
+                minHeight: SidebarMetrics.footerRowHeight
+            ) {
                 selection = .settings
             } content: {
                 SidebarLabel(title: "Настройки") {
@@ -84,7 +88,7 @@ struct SidebarView: View {
                         .frame(width: 15, height: 15)
                 }
             }
-            .padding(SidebarMetrics.outerPadding)
+            .padding(SidebarMetrics.footerPadding)
         }
         .font(.system(size: SidebarMetrics.fontSize))
         // «Новая запись» в sidebar — всегда «Без проекта» (§6.4); проект
@@ -297,6 +301,10 @@ enum SidebarMetrics {
     static let iconSpacing: CGFloat = 8
     /// Отступ над заголовками секций.
     static let sectionTopSpacing: CGFloat = 14
+    /// «Настройки» внизу: скругление созвучно большому углу окна macOS.
+    static let footerCornerRadius: CGFloat = 12
+    static let footerRowHeight: CGFloat = 34
+    static let footerPadding: CGFloat = 10
 }
 
 // MARK: - Строка
@@ -306,6 +314,8 @@ enum SidebarMetrics {
 private struct SidebarRow<Content: View>: View {
     var isSelected = false
     var indent: CGFloat = 0
+    var cornerRadius: CGFloat = SidebarMetrics.cornerRadius
+    var minHeight: CGFloat = SidebarMetrics.rowHeight
     var action: (() -> Void)?
     @ViewBuilder let content: () -> Content
 
@@ -316,12 +326,12 @@ private struct SidebarRow<Content: View>: View {
             .lineLimit(1)
             .padding(.leading, SidebarMetrics.rowPadding + indent)
             .padding(.trailing, SidebarMetrics.rowPadding)
-            .frame(maxWidth: .infinity, minHeight: SidebarMetrics.rowHeight, alignment: .leading)
+            .frame(maxWidth: .infinity, minHeight: minHeight, alignment: .leading)
             .background(
-                RoundedRectangle(cornerRadius: SidebarMetrics.cornerRadius)
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .fill(Color.primary.opacity(isSelected ? 0.09 : (isHovered && action != nil ? 0.05 : 0)))
             )
-            .contentShape(RoundedRectangle(cornerRadius: SidebarMetrics.cornerRadius))
+            .contentShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
             .onTapGesture { action?() }
             .onHover { isHovered = $0 }
     }

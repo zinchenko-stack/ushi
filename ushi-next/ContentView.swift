@@ -16,6 +16,8 @@ struct ContentView: View {
     @AppStorage("update.dismissedVersion") private var dismissedUpdateVersion = ""
     @AppStorage("legacyImport.offered") private var legacyImportOffered = false
     @AppStorage("sidebar.visible") private var sidebarVisible = true
+    /// Где в окне начинается кнопка сворачивания (после «светофора»); ~80 pt, уточняется на лету.
+    @State private var toggleItemStartX: CGFloat = 80
     @State private var legacyPendingCount = 0
 
     init(recordingController: RecordingController) {
@@ -151,15 +153,7 @@ struct ContentView: View {
             .frame(minWidth: 620, maxWidth: .infinity, maxHeight: .infinity)
         }
         .toolbar {
-            ToolbarItem(placement: .navigation) {
-                Button {
-                    withAnimation(.easeInOut(duration: 0.2)) { sidebarVisible.toggle() }
-                } label: {
-                    Label("Боковая панель", systemImage: "sidebar.left")
-                }
-                .help(sidebarVisible ? "Скрыть боковую панель (⌃⌘S)" : "Показать боковую панель (⌃⌘S)")
-                .keyboardShortcut("s", modifiers: [.control, .command])
-            }
+            SidebarToggleToolbar(isSidebarVisible: $sidebarVisible, itemStartX: $toggleItemStartX)
         }
         .modifier(SidebarUnderTitlebar())
         .onChange(of: recordingController.isCreatingProjectFromMenu, initial: true) { _, requested in

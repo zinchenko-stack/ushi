@@ -11,8 +11,9 @@ import SwiftUI
 // MARK: - Новый проект
 
 /// Название — любое. Отдельно и явно — папка, где будут лежать записи:
-/// новая папка с названием проекта (в Ushi или в выбранном месте) либо готовая
-/// папка (тогда название подставляется из неё; поменяли — папка переименуется).
+/// по умолчанию новая папка внутри Ushi, либо готовая папка юзера (тогда название
+/// подставляется из неё; поменяли — папка переименуется). Новую папку в другом
+/// месте юзер создаёт сам прямо в окне выбора («Новая папка»).
 /// Что записывать, не спрашиваем: проект стартует с источниками последней записи.
 struct CreateProjectSheet: View {
     let projects: ProjectsModel
@@ -106,11 +107,6 @@ struct CreateProjectSheet: View {
 
             HStack(spacing: 8) {
                 Button {
-                    pickParent()
-                } label: {
-                    Label("Создать в другом месте…", systemImage: "folder.badge.plus")
-                }
-                Button {
                     pickExisting()
                 } label: {
                     Label("Выбрать готовую…", systemImage: "folder")
@@ -166,16 +162,6 @@ struct CreateProjectSheet: View {
     }
 
     // MARK: Действия
-
-    private func pickParent() {
-        guard let parent = FolderPicker.chooseFolder(
-            message: "Где создать папку проекта?",
-            prompt: "Создать здесь"
-        ) else { return }
-        restoreNameIfNeeded()
-        location = .newFolder(in: parent)
-        errorMessage = nil
-    }
 
     private func pickExisting() {
         guard let folder = FolderPicker.chooseFolder(
