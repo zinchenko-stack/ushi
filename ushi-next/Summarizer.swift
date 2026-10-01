@@ -48,17 +48,36 @@ actor Summarizer {
               FileManager.default.fileExists(atPath: modelURL.path) else { return nil }
         isRunning = true
         defer { isRunning = false }
-        let execution = TitleProcess()
         let modelURL = modelURL, timeout = timeout
-        let prompt = Self.prompt(for: transcript)
-        return await withTaskCancellationHandler {
-            await Task.detached(priority: .utility) {
-                guard let output = execution.run(binary: binaryURL, model: modelURL, prompt: prompt, timeout: timeout) else { return nil }
-                return Self.cleanTitle(output)
-            }.value
-        } onCancel: {
-            execution.cancel()
+        // Сначала ~6 минут разговора: суть встречи обычно начинается после приветствий.
+        // Ответ не прошёл проверку — пробуем коротким началом, потом сдаёмся (AutoTitle).
+        for limit in Self.contextLimits(for: transcript) {
+            if Task.isCancelled { return nil }
+            let execution = TitleProcess()
+            let prompt = Self.prompt(for: transcript, limit: limit)
+            let title: String? = await withTaskCancellationHandler {
+                await Task.detached(priority: .utility) { () -> String? in
+                    guard let output = execution.run(binary: binaryURL, model: modelURL, prompt: prompt, timeout: timeout) else { return nil }
+                    return Self.cleanTitle(output)
+                }.value
+            } onCancel: {
+                execution.cancel()
+            }
+            if let title { return title }
         }
+        return nil
+    }
+
+    /// Сколько символов расшифровки показывать модели. 6000 (~6 минут речи, ~1600
+    /// токенов) — на реальных записях лучше всего: 2000 часто ещё приветствия,
+    /// на 10 000 модель 1B начинает теряться (списки, общие фразы).
+    nonisolated static let primaryContextLimit = 6000
+    nonisolated static let fallbackContextLimit = 2000
+
+    nonisolated static func contextLimits(for transcript: String) -> [Int] {
+        transcript.count > fallbackContextLimit
+            ? [primaryContextLimit, fallbackContextLimit]
+            : [primaryContextLimit]
     }
 
     nonisolated static func shouldGenerate(for transcript: String) -> Bool {
@@ -68,11 +87,11 @@ actor Summarizer {
     /// Задание — ПОСЛЕ текста: маленькая модель к концу длинной расшифровки
     /// «забывает» инструкцию из начала и просто продолжает разговор
     /// («Thanks!», «干得好»). Проверено на реальных записях: так заголовки по сути.
-    nonisolated static func prompt(for transcript: String) -> String {
+    nonisolated static func prompt(for transcript: String, limit: Int = primaryContextLimit) -> String {
         let snippet = transcript
             .split(whereSeparator: { $0.isWhitespace })
             .joined(separator: " ")
-            .prefix(2000)
+            .prefix(limit)
             .replacingOccurrences(of: "<", with: "‹")
             .replacingOccurrences(of: ">", with: "›")
         return """
@@ -95,6 +114,10 @@ actor Summarizer {
             .replacingOccurrences(of: "<end_of_turn>", with: "")
         guard var title = cleaned.split(whereSeparator: { $0.isNewline }).map(String.init)
             .first(where: { !$0.trimmingCharacters(in: .whitespaces).isEmpty }) else { return nil }
+        // «Оценка записи. **Заголовок:** Обсуждение задач» — берём то, что после метки.
+        for marker in ["Заголовок:", "заголовок:", "Название:", "название:"] where title.contains(marker) {
+            title = title.components(separatedBy: marker).last ?? title
+        }
         title = title.replacingOccurrences(of: #"^\s*(?:Заголовок|Название)\s*:\s*"#, with: "", options: [.regularExpression, .caseInsensitive])
         let edges = CharacterSet.whitespacesAndNewlines.union(CharacterSet(charactersIn: "\"'«»„“”‘’*.!?…#`"))
         title = title.trimmingCharacters(in: edges)
@@ -135,7 +158,7 @@ nonisolated private final class TitleProcess: @unchecked Sendable {
             let child = Process()
             child.executableURL = binary
             child.arguments = ["-m", model.path, "-f", input.path, "-no-cnv", "--no-display-prompt",
-                               "--no-escape", "-n", "48", "-c", "2048", "--temp", "0.2", "--seed", "42",
+                               "--no-escape", "-n", "48", "-c", "4096", "--temp", "0.2", "--seed", "42",
                                "-ngl", "99", "--no-warmup", "--no-perf"]
             // Do not inherit model-routing/server settings from the launching shell.
             child.environment = ["PATH": "/usr/bin:/bin", "HOME": NSHomeDirectory(), "TMPDIR": NSTemporaryDirectory()]

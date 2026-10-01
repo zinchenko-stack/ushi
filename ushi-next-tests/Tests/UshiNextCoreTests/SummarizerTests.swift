@@ -18,6 +18,25 @@ final class SummarizerTests: XCTestCase {
         XCTAssertTrue(prompt.hasSuffix("<start_of_turn>model\n"))
     }
 
+    /// Модель видит первые ~6000 символов; если ответ не годится — пробуем 2000.
+    func testContextLimitsAndTruncation() {
+        let long = String(repeating: "слово ", count: 3_000)   // ~18 000 символов
+        XCTAssertEqual(Summarizer.contextLimits(for: long), [6000, 2000])
+        XCTAssertEqual(Summarizer.contextLimits(for: "коротко про дизайн"), [6000])
+
+        let prompt6000 = Summarizer.prompt(for: long)
+        let prompt2000 = Summarizer.prompt(for: long, limit: 2000)
+        XCTAssertGreaterThan(prompt6000.count, prompt2000.count + 3_900)
+        XCTAssertLessThan(prompt6000.count, 6_000 + 600, "огромный звонок целиком не берём")
+    }
+
+    func testCleanTitleTakesTextAfterInlineHeaderMarker() {
+        XCTAssertEqual(
+            Summarizer.cleanTitle("Оценка и анализ записи. **Заголовок:** Обсуждение и детализация задач."),
+            "Обсуждение и детализация задач"
+        )
+    }
+
     func testShouldGenerateWordCountRule() {
         // Less than or equal to 40 words -> false
         let shortText = (1...40).map { "слово\($0)" }.joined(separator: " ")
