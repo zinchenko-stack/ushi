@@ -18,15 +18,23 @@ struct SidebarView: View {
     var body: some View {
         VStack(spacing: 0) {
             List(selection: $selection) {
-                // Обычный пункт меню, а не отдельная кнопка: ведёт на hero-экран,
-                // где стартует запись. Во время записи показывает таймер.
-                NewRecordingRow(controller: controller)
-                    .tag(MainSelection.home)
+                // В безымянной секции, как остальные пункты: строки вне секций
+                // macOS сдвигает правее, и они не совпадали по краю с «Записями».
+                Section {
+                    // Обычный пункт меню, а не отдельная кнопка: ведёт на hero-экран,
+                    // где стартует запись. Во время записи показывает таймер.
+                    NewRecordingRow(controller: controller)
+                        .padding(.leading, SidebarRowMetrics.topRowsLeadingFix)
+                        .tag(MainSelection.home)
 
-                // Phase 4 заменит на глобальный поиск; пока ведёт в список всех записей
-                // с поиском по названию и тексту, чтобы не потерять старую функцию.
-                Label("Поиск", systemImage: "magnifyingglass")
+                    // Phase 4 заменит на глобальный поиск; пока ведёт в список всех записей
+                    // с поиском по названию и тексту, чтобы не потерять старую функцию.
+                    SidebarIconRow(title: "Поиск") {
+                        Image(systemName: "magnifyingglass")
+                    }
+                    .padding(.leading, SidebarRowMetrics.topRowsLeadingFix)
                     .tag(MainSelection.search)
+                }
 
                 Section {
                     if model.pinnedAndSortedProjects.isEmpty {
@@ -255,20 +263,18 @@ private struct NewRecordingRow: View {
     let controller: RecordingController
 
     var body: some View {
-        HStack(spacing: 6) {
-            Label {
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(controller.isRecording ? "Идёт запись" : "Новая запись")
-                    if controller.isRecording || controller.isCountingDown {
-                        Text(controller.activeProject?.name ?? "Записи")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
+        HStack(spacing: SidebarRowMetrics.spacing) {
+            Image(systemName: controller.isRecording ? "record.circle.fill" : "record.circle")
+                .foregroundStyle(controller.isRecording ? Color.red : Color.primary)
+                .frame(width: SidebarRowMetrics.iconWidth)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(controller.isRecording ? "Идёт запись" : "Новая запись")
+                if controller.isRecording || controller.isCountingDown {
+                    Text(controller.activeProject?.name ?? "Записи")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
                 }
-            } icon: {
-                Image(systemName: controller.isRecording ? "record.circle.fill" : "record.circle")
-                    .foregroundStyle(controller.isRecording ? Color.red : Color.primary)
             }
             Spacer(minLength: 4)
             if let cd = controller.countdown {
@@ -447,14 +453,38 @@ private struct SidebarAssetRow: View {
     let imageName: String
 
     var body: some View {
-        Label {
-            Text(title)
-        } icon: {
+        SidebarIconRow(title: title) {
             Image(imageName)
                 .resizable()
                 .renderingMode(.template)
                 .scaledToFit()
                 .frame(width: 16, height: 16)
+        }
+    }
+}
+
+/// Строка sidebar «иконка + текст» с явной колонкой под иконку — как у строк
+/// проектов. Стандартный Label в sidebar отводит иконке более широкое поле,
+/// и такие строки начинались правее папок и записей.
+private enum SidebarRowMetrics {
+    /// Колонка под иконку и отступ до текста — как у строк проектов (ProjectRow).
+    static let iconWidth: CGFloat = 16
+    static let spacing: CGFloat = 6
+    /// Строки вне раскрывающихся разделов («Новая запись», «Поиск») macOS
+    /// ставит правее строк проектов и записей (~5.5 pt). Возвращаем на общий край.
+    static let topRowsLeadingFix: CGFloat = -5.5
+}
+
+private struct SidebarIconRow<Icon: View>: View {
+
+    let title: String
+    @ViewBuilder let icon: () -> Icon
+
+    var body: some View {
+        HStack(spacing: SidebarRowMetrics.spacing) {
+            icon()
+                .frame(width: SidebarRowMetrics.iconWidth)
+            Text(title)
         }
     }
 }
@@ -488,10 +518,10 @@ private struct SettingsFooterRow: View {
         Button(action: action) {
             SidebarAssetRow(title: "Настройки", imageName: "Bolt")
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 8)
+                .padding(.horizontal, 14)
                 .padding(.vertical, 6)
                 .background(
-                    RoundedRectangle(cornerRadius: 6)
+                    RoundedRectangle(cornerRadius: 8)
                         .fill(isSelected ? Color.primary.opacity(0.1) : Color.clear)
                 )
                 .contentShape(Rectangle())
