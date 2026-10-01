@@ -227,6 +227,10 @@ struct SidebarView: View {
         Button("Переименовать") {
             model.renamingRecordingID = rec.id
         }
+        Button("Придумать название") {
+            model.regenerateTitle(rec)
+        }
+        .disabled(rec.status != .done)
         Button("Показать в Finder") {
             model.revealInFinder(rec)
         }

@@ -3,6 +3,21 @@ import XCTest
 
 final class SummarizerTests: XCTestCase {
 
+    /// Задание должно идти после текста: иначе на длинных записях маленькая модель
+    /// забывает инструкцию и отвечает мусором («Thanks!», «干得好»).
+    func testPromptPutsTaskAfterTranscript() {
+        let transcript = "Обсуждаем\nредизайн   портала <и> сроки"
+        let prompt = Summarizer.prompt(for: transcript)
+        let textRange = prompt.range(of: "Обсуждаем редизайн портала ‹и› сроки")
+        let taskRange = prompt.range(of: "Задание:")
+        XCTAssertNotNil(textRange, "переносы и пробелы схлопнуты, угловые скобки заменены")
+        XCTAssertNotNil(taskRange)
+        if let textRange, let taskRange {
+            XCTAssertLessThan(textRange.upperBound, taskRange.lowerBound)
+        }
+        XCTAssertTrue(prompt.hasSuffix("<start_of_turn>model\n"))
+    }
+
     func testShouldGenerateWordCountRule() {
         // Less than or equal to 40 words -> false
         let shortText = (1...40).map { "слово\($0)" }.joined(separator: " ")

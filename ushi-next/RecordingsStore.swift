@@ -609,10 +609,13 @@ final class RecordingsStore {
     /// которые юзер задал руками. Если включены «Умные названия» и модель готова — используем
     /// локальную LLM (Gemma 3), иначе/при ошибке — fallback на AutoTitle.make (первая фраза).
     /// Файлы переименовываются под новое название, как при ручном переименовании.
-    private func applyAutoTitle(id: UUID, transcriptURL: URL) async {
+    /// `force` — юзер сам попросил «Придумать название»: тогда и ручное название
+    /// можно заменить. Возвращает, получилось ли.
+    @discardableResult
+    private func applyAutoTitle(id: UUID, transcriptURL: URL, force: Bool = false) async -> Bool {
         guard let idx = recordings.firstIndex(where: { $0.id == id }),
-              recordings[idx].titleSource != .manual,
-              let labeled = try? String(contentsOf: transcriptURL, encoding: .utf8) else { return }
+              force || recordings[idx].titleSource != .manual,
+              let labeled = try? String(contentsOf: transcriptURL, encoding: .utf8) else { return false }
         // Метки «Я:» / «Собеседник:» в название не тащим.
         let text = TranscriptionService.removingSpeakerLabels(labeled)
 
@@ -626,11 +629,19 @@ final class RecordingsStore {
 
         guard let title = finalTitle,
               let currentIdx = recordings.firstIndex(where: { $0.id == id }),
-              recordings[currentIdx].titleSource != .manual else { return }
+              force || recordings[currentIdx].titleSource != .manual else { return false }
 
         recordings[currentIdx].title = title
         recordings[currentIdx].titleSource = .auto
         renameFilesOnDisk(at: currentIdx)
+        return true
+    }
+
+    /// «Придумать название»: заново по готовой расшифровке, без повторной расшифровки.
+    func regenerateTitle(_ recording: Recording) async -> Bool {
+        guard recording.status == .done,
+              let (txtURL, _) = recording.resolveTranscriptURL() else { return false }
+        return await applyAutoTitle(id: recording.id, transcriptURL: txtURL, force: true)
     }
 
     /// Fallback-имя до авто-названия (§7.3): «Психолог · 29 сент., 19:40».

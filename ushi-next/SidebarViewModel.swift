@@ -229,6 +229,16 @@ final class SidebarViewModel {
         }
     }
 
+    /// «Придумать название» по готовой расшифровке — умными названиями,
+    /// если включены, иначе первой осмысленной фразой.
+    func regenerateTitle(_ recording: Recording) {
+        Task {
+            if !(await store.regenerateTitle(recording)) {
+                alertMessage = "Не получилось придумать название: у записи нет расшифровки."
+            }
+        }
+    }
+
     func commitRename(_ recording: Recording, to title: String) {
         renamingRecordingID = nil
         store.rename(recording, to: title)
