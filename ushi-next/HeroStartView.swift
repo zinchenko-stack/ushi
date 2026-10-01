@@ -114,7 +114,7 @@ struct HeroStartView: View {
                         .padding(.horizontal, 24)
                 }
             }
-            .padding(.top, 40)
+            .padding(.top, 64)
             .frame(maxHeight: .infinity, alignment: .top)
         }
         // Кнопка записи чуть выше середины окна.
