@@ -15,14 +15,19 @@ import Foundation
 import Observation
 import AppKit
 
-/// URL манифеста с информацией о последней версии. Замени на свой,
-/// когда настроишь GitHub Releases / GitHub Pages / S3 / любой статический хостинг.
-private let manifestURL = URL(string: "https://github.com/zinchenko-stack/ushi/releases/latest/download/latest-mac.json")!
+/// Свой канал обновлений UshiNext — манифест рядом с UshiNext.dmg на сайте.
+/// Не канал старого Ushi на GitHub: там лежит Ushi 1.1, и UshiNext 1.0 принимал
+/// его за своё обновление (а «Скачать» вёл на старое приложение).
+private let manifestURL = URL(string: "https://ushi.zinchenko.cc/downloads/UshiNext.json")!
+
+/// Принимаем только манифест своего приложения.
+private let expectedAppName = "UshiNext"
 
 @Observable
 final class UpdateChecker {
 
     struct Manifest: Decodable {
+        let appName: String?
         let version: String
         let publishedAt: String?
         let dmgUrl: String?
@@ -65,6 +70,11 @@ final class UpdateChecker {
                 return
             }
             let manifest = try JSONDecoder().decode(Manifest.self, from: data)
+            // Чужой манифест (например, старого Ushi) — не обновление для нас.
+            guard manifest.appName?.caseInsensitiveCompare(expectedAppName) == .orderedSame else {
+                state = .upToDate
+                return
+            }
             if Self.isNewer(manifest.version, than: currentVersion) {
                 state = .available(manifest)
             } else {

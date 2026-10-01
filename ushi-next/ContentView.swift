@@ -116,7 +116,7 @@ struct ContentView: View {
     }
 
     private func updateAlertMessage(for manifest: UpdateChecker.Manifest) -> String {
-        var lines = ["ushi \(manifest.version) доступна для загрузки."]
+        var lines = ["Ushi Next \(manifest.version) доступна для загрузки."]
         if let notes = manifest.notes, !notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             lines.append("")
             lines.append(notes)
