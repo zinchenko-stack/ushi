@@ -172,10 +172,10 @@
       padding: 12px 40px;
       border-radius: 16px;
       font-family: "Onest", sans-serif;
-      font-weight: 500;
-      font-size: 17px;
+      font-weight: 400;
+      font-size: 16px;
       line-height: 24px;
-      letter-spacing: -0.34px;
+      letter-spacing: -0.32px;
       transition: filter 0.15s ease, transform 0.15s ease;
     }
 
@@ -192,6 +192,8 @@
       height: 20px;
       display: block;
       flex-shrink: 0;
+      /* Яблоко визуально тяжелее снизу — чуть выше, чтобы стояло вровень с текстом. */
+      transform: translateY(-2px);
     }
 
     .caption {
@@ -258,9 +260,9 @@
       .cta {
         gap: 10px;
         padding: 12px 24px;
-        font-size: 16px;
+        font-size: 15px;
         line-height: 22px;
-        letter-spacing: -0.32px;
+        letter-spacing: -0.3px;
       }
       .caption {
         font-size: 13px;
