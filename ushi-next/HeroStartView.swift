@@ -11,11 +11,11 @@ import SwiftUI
 
 struct HeroStartView: View {
     @Bindable var controller: RecordingController
+    /// Целевой Проект для старта из hero. nil — «Без проекта». Живёт снаружи:
+    /// «+» у проекта в sidebar открывает hero уже с выбранным проектом.
+    @Binding var targetProjectID: UUID?
     /// Открыть запись по тапу на тост «Запись сохранена».
     var onOpenRecording: (Recording) -> Void
-
-    /// Целевой Проект для старта из hero. nil — «Без проекта».
-    @State private var targetProjectID: UUID?
     @State private var isCreatingProject = false
 
     @State private var sourceHint: String?

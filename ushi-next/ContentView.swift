@@ -151,7 +151,7 @@ struct ContentView: View {
     private var detail: some View {
         switch selection ?? .home {
         case .home:
-            HeroStartView(controller: recordingController) { rec in
+            HeroStartView(controller: recordingController, targetProjectID: $sidebarModel.heroProjectID) { rec in
                 selection = .recording(rec.id)
             }
         case .search:

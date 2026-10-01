@@ -53,6 +53,13 @@ final class SidebarViewModel {
 
     var alertMessage: String?
 
+    // MARK: Экран «Новая запись»
+
+    /// Проект, выбранный на экране «Новая запись». nil — «Без проекта».
+    var heroProjectID: UUID?
+    /// Следующий переход на «Новую запись» пришёл от «+» у проекта — не сбрасывать.
+    @ObservationIgnored private var keepHeroProjectOnNextHome = false
+
     init(controller: RecordingController) {
         self.controller = controller
         self.collapsedProjectIDs = Self.loadCollapsed()
@@ -120,6 +127,21 @@ final class SidebarViewModel {
         let recent = store.recordings(inProject: recording.projectId).prefix(Self.recentLimit)
         if !recent.contains(where: { $0.id == recording.id }) {
             expandedAll.insert(project?.id)
+        }
+    }
+
+    /// «+» у проекта: открыть «Новую запись» с этим проектом, без автостарта.
+    func prepareNewRecording(in project: Project, alreadyOnHome: Bool) {
+        heroProjectID = project.id
+        keepHeroProjectOnNextHome = !alreadyOnHome
+    }
+
+    func selectionChanged(to selection: MainSelection?) {
+        guard selection == .home else { return }
+        if keepHeroProjectOnNextHome {
+            keepHeroProjectOnNextHome = false
+        } else {
+            heroProjectID = nil
         }
     }
 

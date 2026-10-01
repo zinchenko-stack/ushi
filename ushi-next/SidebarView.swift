@@ -69,6 +69,11 @@ struct SidebarView: View {
             }
         }
         .navigationTitle("Ushi")
+        // «Новая запись» в sidebar — всегда «Без проекта» (§6.4); проект
+        // подставляется, только если пришли через «+» у проекта.
+        .onChange(of: selection) { _, newValue in
+            model.selectionChanged(to: newValue)
+        }
         .sheet(isPresented: $model.isCreatingProject) {
             CreateProjectSheet(projects: controller.projects) { project in
                 model.didCreateProject(project)
@@ -138,11 +143,12 @@ struct SidebarView: View {
                 folderPath: model.folderPath(of: project),
                 isRenaming: model.renamingProjectID == project.id,
                 isRecordingHere: controller.isRecording && controller.activeProjectID == project.id,
-                canStart: model.isAvailable(project)
-                    && !controller.isRecording && !controller.isBusy && !controller.isCountingDown,
+                canStart: model.isAvailable(project),
                 onStart: {
+                    // Не стартуем сразу: открываем «Новую запись» с выбранным проектом —
+                    // там видно и можно поменять источники.
+                    model.prepareNewRecording(in: project, alreadyOnHome: selection == .home)
                     selection = .home
-                    Task { await controller.startInProject(project) }
                 },
                 onCommitRename: { model.commitRename(project, to: $0) },
                 onCancelRename: { model.renamingProjectID = nil }
@@ -353,12 +359,12 @@ private struct ProjectRow<MenuContent: View>: View {
 
             if isHovered && !isRenaming {
                 Button(action: onStart) {
-                    Image(systemName: "record.circle")
-                        .foregroundStyle(canStart ? Color.red : Color.secondary)
+                    Image(systemName: "plus")
+                        .foregroundStyle(canStart ? Color.primary : Color.secondary)
                 }
                 .buttonStyle(.plain)
                 .disabled(!canStart)
-                .help("Записать в «\(project.name)»")
+                .help("Новая запись в «\(project.name)»")
 
                 Menu {
                     menu()
