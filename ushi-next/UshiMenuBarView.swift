@@ -81,7 +81,7 @@ struct UshiMenuBarLabel: View {
 
     var body: some View {
         HStack(spacing: 4) {
-            Image(controller.isRecording ? "MenuBarWaveform" : "MenuBarWaveformNext")
+            Image("MenuBarWaveform")
                 .renderingMode(.template)
                 .resizable()
                 .scaledToFit()
@@ -91,7 +91,7 @@ struct UshiMenuBarLabel: View {
                     .monospacedDigit()
             }
         }
-        .accessibilityLabel(controller.isRecording ? "Ushi Next, идёт запись" : "Ushi Next")
+        .accessibilityLabel(controller.isRecording ? "Ushi, идёт запись" : "Ushi")
     }
 }
 

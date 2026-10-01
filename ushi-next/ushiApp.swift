@@ -9,6 +9,8 @@ import SwiftUI
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
+        // После переименования UshiNext → Ushi: предложить убрать старую копию.
+        DispatchQueue.main.async { OldCopyCleanup.offerIfNeeded() }
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {

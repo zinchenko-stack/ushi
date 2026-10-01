@@ -15,13 +15,15 @@ import Foundation
 import Observation
 import AppKit
 
-/// Свой канал обновлений UshiNext — манифест рядом с UshiNext.dmg на сайте.
-/// Не канал старого Ushi на GitHub: там лежит Ushi 1.1, и UshiNext 1.0 принимал
-/// его за своё обновление (а «Скачать» вёл на старое приложение).
-private let manifestURL = URL(string: "https://ushi.zinchenko.cc/downloads/UshiNext.json")!
+/// С версии 2.0 (UshiNext → Ushi) канал общий со старым Ushi: GitHub Releases.
+/// Так старый Ushi 1.x тоже увидит 2.0 и предложит обновиться. Старые манифесты
+/// (Ushi 1.x, appName «ushi») ниже 2.0 — их мы не предложим.
+/// UshiNext 1.0 смотрел https://ushi.zinchenko.cc/downloads/UshiNext.json — там
+/// «мост» на этот же релиз (пишет scripts/build-ushinext-dmg.sh).
+private let manifestURL = URL(string: "https://github.com/zinchenko-stack/ushi/releases/latest/download/latest-mac.json")!
 
-/// Принимаем только манифест своего приложения.
-private let expectedAppName = "UshiNext"
+/// Принимаем только манифест своего приложения (регистр не важен: «ushi» = «Ushi»).
+private let expectedAppName = "Ushi"
 
 @Observable
 final class UpdateChecker {

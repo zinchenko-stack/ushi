@@ -334,7 +334,7 @@ final class AudioRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
         guard recordingActivity == nil else { return }
         recordingActivity = ProcessInfo.processInfo.beginActivity(
             options: [.userInitiated, .idleSystemSleepDisabled, .idleDisplaySleepDisabled],
-            reason: "UshiNext: запись лекции"
+            reason: "Ushi: идёт запись"
         )
     }
 

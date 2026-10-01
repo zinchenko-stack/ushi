@@ -11,7 +11,9 @@ import Foundation
 
 enum AppContainer {
     /// Имя поддиректории в ~/Library/Application Support/ и в ~/Documents/.
-    /// При миграции на основную сборку меняется на "ushi".
+    /// С 2.0 приложение называется просто Ushi, но папка данных и bundle id
+    /// остаются от UshiNext: у тех, кто им пользовался, ничего не теряется,
+    /// а папку старого Ushi 1.x («ushi») мы не трогаем — из неё только импорт.
     static let name = "UshiNext"
 
     /// Suite name для UserDefaults, если потребуется использовать
