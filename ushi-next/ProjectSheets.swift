@@ -10,20 +10,24 @@ import SwiftUI
 
 // MARK: - Новый проект
 
+/// Либо вписываем название (проект внутри Ushi), либо выбираем папку — тогда
+/// название берётся из её имени. Что записывать, не спрашиваем: новый проект
+/// стартует с источниками последней записи, дальше запоминает свои.
 struct CreateProjectSheet: View {
     let projects: ProjectsModel
     var onCreated: (Project) -> Void
 
     @Environment(\.dismiss) private var dismiss
-    @State private var name = ""
-    @State private var preset: RecordingPreset = AppState.mostRecentPreset()
-    /// Выбранная папка для external-Проекта. nil — «Создать в Ushi» (managed).
+    /// Название, вписанное руками. Не теряется, если выбрали и потом убрали папку.
+    @State private var typedName = ""
+    /// Выбранная папка (external-Проект). nil — проект внутри Ushi (managed).
     @State private var folder: URL?
     @State private var errorMessage: String?
     @FocusState private var nameFocused: Bool
 
-    private var trimmedName: String {
-        name.trimmingCharacters(in: .whitespacesAndNewlines)
+    /// Название будущего проекта: имя папки, если она выбрана.
+    private var effectiveName: String {
+        (folder?.lastPathComponent ?? typedName).trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     var body: some View {
@@ -31,45 +35,15 @@ struct CreateProjectSheet: View {
             Text("Новый проект")
                 .font(.title2.weight(.semibold))
 
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 8) {
                 Text("Название")
                     .font(.headline)
-                TextField("Например, «Лекции»", text: $name)
-                    .textFieldStyle(.roundedBorder)
-                    .focused($nameFocused)
-                    .onSubmit(create)
-                    .disabled(folder != nil)
-                if folder != nil {
-                    // У проекта в своей папке название = имя папки (синхронны в обе стороны).
-                    Text("Совпадает с именем папки. Переименуете проект — переименуется и папка.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Что записываем")
-                    .font(.headline)
-                ForEach(RecordingPreset.Source.available, id: \.self) { source in
-                    Toggle(isOn: $preset.binding(for: source)) {
-                        Label(source.title, systemImage: source.systemImage)
-                    }
-                    .toggleStyle(.checkbox)
-                    .disabled(!preset.canToggle(source))
-                }
-            }
-
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Где хранить")
-                    .font(.headline)
-                Picker("Где хранить", selection: storageChoice) {
-                    Text("Создать в Ushi").tag(false)
-                    Text("Использовать существующую папку").tag(true)
-                }
-                .pickerStyle(.radioGroup)
-                .labelsHidden()
 
                 if let folder {
+                    TextField("", text: .constant(folder.lastPathComponent))
+                        .textFieldStyle(.roundedBorder)
+                        .disabled(true)
+
                     HStack(spacing: 6) {
                         Image(systemName: "folder")
                             .foregroundStyle(.secondary)
@@ -77,11 +51,39 @@ struct CreateProjectSheet: View {
                             .lineLimit(1)
                             .truncationMode(.middle)
                             .foregroundStyle(.secondary)
-                        Button("Изменить…", action: pickFolder)
+                        Spacer(minLength: 4)
+                        Button("Другая…", action: pickFolder)
                             .buttonStyle(.link)
+                        Button {
+                            self.folder = nil
+                            nameFocused = true
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Не использовать папку — вписать название")
                     }
                     .font(.callout)
-                    .padding(.leading, 20)
+
+                    Text("Название проекта = имя папки. Переименуете проект — переименуется и папка.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    TextField("Например, «Лекции»", text: $typedName)
+                        .textFieldStyle(.roundedBorder)
+                        .focused($nameFocused)
+                        .onSubmit(create)
+
+                    HStack(spacing: 4) {
+                        Text("или")
+                            .foregroundStyle(.secondary)
+                        Button("выберите папку на Mac…", action: pickFolder)
+                            .buttonStyle(.link)
+                        Text("— записи будут лежать в ней")
+                            .foregroundStyle(.secondary)
+                    }
+                    .font(.callout)
                 }
             }
 
@@ -97,39 +99,25 @@ struct CreateProjectSheet: View {
                     .keyboardShortcut(.cancelAction)
                 Button("Создать", action: create)
                     .keyboardShortcut(.defaultAction)
-                    .disabled(trimmedName.isEmpty)
+                    .disabled(effectiveName.isEmpty)
             }
         }
         .padding(24)
-        .frame(width: 400)
+        .frame(width: 420)
         .onAppear { nameFocused = true }
-    }
-
-    /// Радио «Где хранить»: выбор «существующей папки» сразу открывает Finder;
-    /// если там нажали «Отмена» — остаёмся на «Создать в Ushi».
-    private var storageChoice: Binding<Bool> {
-        Binding(
-            get: { folder != nil },
-            set: { useFolder in
-                if useFolder {
-                    pickFolder()
-                } else {
-                    folder = nil
-                }
-            }
-        )
     }
 
     private func pickFolder() {
         guard let picked = FolderPicker.chooseFolder(message: "Выберите папку, где будут лежать записи проекта") else { return }
         folder = picked
-        name = picked.lastPathComponent
+        errorMessage = nil
     }
 
     private func create() {
-        guard !trimmedName.isEmpty else { return }
+        guard !effectiveName.isEmpty else { return }
         do {
-            let project = try projects.create(name: trimmedName, preset: preset, folder: folder)
+            // Источники — как у последней записи; дальше проект запоминает свои.
+            let project = try projects.create(name: effectiveName, preset: AppState.mostRecentPreset(), folder: folder)
             onCreated(project)
             dismiss()
         } catch {
