@@ -107,6 +107,7 @@ struct HistoryView: View {
                             }
                         }
                         .listStyle(.plain)
+                        .scrollContentBackground(.hidden)   // фон окна, как в Claude Code
                         .onChange(of: selection) { _, id in
                             guard let id, let rec = store.recordings.first(where: { $0.id == id }) else { return }
                             onOpen(rec)

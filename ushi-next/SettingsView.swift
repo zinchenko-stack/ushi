@@ -61,6 +61,7 @@ struct SettingsView: View {
             legacySection
         }
         .formStyle(.grouped)
+        .scrollContentBackground(.hidden)   // фон окна, как в Claude Code
         .navigationTitle("Настройки")
         .alert(
             pendingConfirmation?.title ?? "",

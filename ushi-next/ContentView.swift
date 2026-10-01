@@ -138,7 +138,7 @@ struct ContentView: View {
                     .background(SidebarBackground().ignoresSafeArea())
                     .overlay(alignment: .trailing) {
                         Rectangle()
-                            .fill(Color.primary.opacity(0.08))
+                            .fill(AppColors.divider)
                             .frame(width: 1)
                             .ignoresSafeArea()
                     }
@@ -151,6 +151,7 @@ struct ContentView: View {
                     }
             }
             .frame(minWidth: 620, maxWidth: .infinity, maxHeight: .infinity)
+            .background(AppColors.content.ignoresSafeArea())
         }
         .toolbar {
             SidebarToggleToolbar(isSidebarVisible: $sidebarVisible, itemStartX: $toggleItemStartX)

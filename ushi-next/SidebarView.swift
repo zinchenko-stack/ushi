@@ -71,7 +71,9 @@ struct SidebarView: View {
             }
             .scrollIndicators(.never)
 
-            Divider()
+            Rectangle()
+                .fill(AppColors.divider)
+                .frame(height: 1)
 
             SidebarRow(
                 isSelected: selection == .settings,
@@ -88,7 +90,8 @@ struct SidebarView: View {
                         .frame(width: 15, height: 15)
                 }
             }
-            .padding(SidebarMetrics.footerPadding)
+            .padding(.horizontal, SidebarMetrics.footerPadding)
+            .padding(.vertical, SidebarMetrics.footerPadding - 2)
         }
         .font(.system(size: SidebarMetrics.fontSize))
         // «Новая запись» в sidebar — всегда «Без проекта» (§6.4); проект
@@ -372,7 +375,8 @@ private struct SidebarSectionHeader<Trailing: View>: View {
                     .foregroundStyle(.tertiary)
             }
             Spacer(minLength: 4)
-            if isHovered { trailing() }
+            // «+» у «Проектов» виден всегда, не только при наведении.
+            trailing()
         }
         .padding(.horizontal, SidebarMetrics.rowPadding)
         .frame(minHeight: 24)
@@ -614,13 +618,25 @@ private struct IdentifiedMove: Identifiable {
 
 // MARK: - Фон колонки
 
-/// Фон левой колонки: чуть темнее основного окна, как боковая панель Claude Code.
-struct SidebarBackground: View {
-    @Environment(\.colorScheme) private var colorScheme
+/// Цвета окна как в Claude Code: колонка почти чёрная, основная часть чуть
+/// светлее, разделитель едва заметный. Для светлой темы — такие же пары оттенков.
+enum AppColors {
+    static let sidebar = adaptive(dark: 0.075, light: 0.955)   // #131313 / #F4F4F4
+    static let content = adaptive(dark: 0.094, light: 0.985)   // #181818 / #FBFBFB
+    static let divider = Color.primary.opacity(0.08)
 
+    private static func adaptive(dark: CGFloat, light: CGFloat) -> Color {
+        Color(nsColor: NSColor(name: nil) { appearance in
+            let isDark = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+            return NSColor(white: isDark ? dark : light, alpha: 1)
+        })
+    }
+}
+
+/// Фон левой колонки.
+struct SidebarBackground: View {
     var body: some View {
-        Color(nsColor: .windowBackgroundColor)
-            .overlay(Color.black.opacity(colorScheme == .dark ? 0.18 : 0.04))
+        AppColors.sidebar
     }
 }
 
