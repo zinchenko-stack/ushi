@@ -227,7 +227,7 @@ private struct DownloadBanner: View {
         case .failed(let message):
             HStack(spacing: 10) {
                 Image(systemName: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.red)
+                    .foregroundStyle(AppColors.red)
 
                 Text("Ошибка загрузки модели: \(message)")
                     .font(.caption)

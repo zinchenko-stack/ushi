@@ -112,7 +112,7 @@ struct HeroStartView: View {
                     // показывает запрос, пользователь ничего не сделал не так.
                     Text(errorMessage)
                         .font(.callout)
-                        .foregroundStyle(controller.errorIsPermissionHint ? Color.secondary : Color.red)
+                        .foregroundStyle(controller.errorIsPermissionHint ? Color.secondary : AppColors.red)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 24)
                 }
@@ -275,7 +275,7 @@ struct HeroStartView: View {
     }
 
     private var buttonFill: Color {
-        if controller.isRecording { return .red }
+        if controller.isRecording { return AppColors.red }
         if controller.isCountingDown { return .secondary.opacity(0.6) }
         return AppColors.accentFill
     }
@@ -301,7 +301,7 @@ struct HeroStartView: View {
     }
 
     private var levelColor: Color {
-        if recorder.level > 0.85 { return .red }
+        if recorder.level > 0.85 { return AppColors.red }
         if recorder.level > 0.6 { return .yellow }
         return .green
     }

@@ -103,7 +103,7 @@ struct OnboardingView: View {
         case .failed(let message):
             VStack(spacing: 16) {
                 Label(message, systemImage: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.red)
+                    .foregroundStyle(AppColors.red)
                     .multilineTextAlignment(.center)
 
                 Button("Повторить") {

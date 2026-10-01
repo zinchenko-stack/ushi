@@ -370,7 +370,7 @@ private struct RecordingRow: View {
     }
 
     private var statusColor: Color {
-        recording.status == .failed ? .red : .orange
+        recording.status == .failed ? AppColors.red : .orange
     }
 
     private func formatDuration(_ t: TimeInterval) -> String {

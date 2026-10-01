@@ -411,7 +411,8 @@ private struct SidebarHoverButton: View {
 
 // MARK: - «Новая запись» (§6.4)
 
-/// Плюс в кружке; во время отсчёта и записи — красная точка, таймер и Проект.
+/// Плюс в кружке; во время отсчёта и записи — красная точка, таймер и Проект
+/// (если запись идёт в Проект).
 private struct NewRecordingRowContent: View {
     let controller: RecordingController
 
@@ -419,11 +420,12 @@ private struct NewRecordingRowContent: View {
         HStack(spacing: SidebarMetrics.iconSpacing) {
             Image(systemName: controller.isRecording ? "record.circle.fill" : "plus.circle")
                 .font(.system(size: SidebarMetrics.iconSize + 1))
-                .foregroundStyle(controller.isRecording ? Color.red : Color.primary)
+                .foregroundStyle(controller.isRecording ? AppColors.red : Color.primary)
                 .frame(width: SidebarMetrics.iconColumn)
             Text(controller.isRecording ? "Идёт запись" : "Новая запись")
-            if controller.isRecording || controller.isCountingDown {
-                Text(controller.activeProject?.name ?? "Записи")
+            if controller.isRecording || controller.isCountingDown,
+               let project = controller.activeProject {
+                Text(project.name)
                     .font(.system(size: SidebarMetrics.smallFontSize))
                     .foregroundStyle(.secondary)
             }
@@ -435,7 +437,7 @@ private struct NewRecordingRowContent: View {
             } else if controller.isRecording {
                 Text(formatTime(controller.recorder.elapsed))
                     .font(.system(size: SidebarMetrics.smallFontSize).monospacedDigit())
-                    .foregroundStyle(.red)
+                    .foregroundStyle(AppColors.red)
             }
         }
     }
@@ -527,7 +529,7 @@ private struct ProjectRowContent<MenuContent: View>: View {
         if isRecordingHere {
             Image(systemName: "record.circle.fill")
                 .font(.system(size: SidebarMetrics.iconSize))
-                .foregroundStyle(.red)
+                .foregroundStyle(AppColors.red)
         } else if !isAvailable {
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(.system(size: SidebarMetrics.iconSize - 1))
@@ -629,6 +631,8 @@ enum AppColors {
     /// Claude Code (#042040 / #6CA4EC), в светлой — светло-голубая с синим.
     static let accentFill = pair(dark: 0x042040, light: 0xCBE1F9)
     static let accentGlyph = pair(dark: 0x6CA4EC, light: 0x164E93)
+    /// Красный записи, ошибок и удаления — приглушённый, а не системный яркий.
+    static let red = pair(dark: 0xC62135, light: 0xC62135)
     /// Точка в кнопке записи: в тёмной теме белая; в светлой белая потерялась бы
     /// на светло-голубом — там синяя.
     static let recordDot = pair(dark: 0xFFFFFF, light: 0x164E93)

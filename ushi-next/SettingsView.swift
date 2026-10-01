@@ -110,7 +110,7 @@ struct SettingsView: View {
             if let folderError {
                 Text(folderError)
                     .font(.footnote)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(AppColors.red)
             }
         }
     }
@@ -189,7 +189,7 @@ struct SettingsView: View {
                     VStack(alignment: .leading, spacing: 6) {
                         Text(message)
                             .font(.footnote)
-                            .foregroundStyle(.red)
+                            .foregroundStyle(AppColors.red)
                         Button("Повторить загрузку") {
                             smartTitleManager.startDownload()
                         }

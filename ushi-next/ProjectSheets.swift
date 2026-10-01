@@ -65,7 +65,7 @@ struct CreateProjectSheet: View {
             if let errorMessage {
                 Text(errorMessage)
                     .font(.callout)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(AppColors.red)
             }
 
             HStack {
@@ -246,7 +246,7 @@ struct DeleteProjectSheet: View {
                      ? "Записи и их файлы будут удалены без возможности восстановления."
                      : keepText)
                     .font(.callout)
-                    .foregroundStyle(deleteRecordings ? Color.red : Color.secondary)
+                    .foregroundStyle(deleteRecordings ? AppColors.red : Color.secondary)
 
                 if needsTypedConfirm {
                     VStack(alignment: .leading, spacing: 6) {

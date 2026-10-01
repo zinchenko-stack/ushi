@@ -21,9 +21,16 @@ struct UshiMenuBarView: View {
     private var projects: [Project] { controller.projects.projects }
     private var isIdle: Bool { !controller.isRecording && !controller.isBusy && !controller.isCountingDown }
 
+    /// «● Идёт запись · 00:12» и, если запись идёт в Проект, его название.
+    private var recordingLine: String {
+        var parts = ["● Идёт запись", formatTime(recorder.elapsed)]
+        if let name = controller.activeProject?.name { parts.append(name) }
+        return parts.joined(separator: " · ")
+    }
+
     var body: some View {
         if controller.isRecording {
-            Text("● Идёт запись · \(formatTime(recorder.elapsed)) · \(controller.activeProject?.name ?? "Записи")")
+            Text(recordingLine)
             Button("Остановить") {
                 Task { await controller.stop() }
             }

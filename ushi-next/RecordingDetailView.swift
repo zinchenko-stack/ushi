@@ -217,7 +217,7 @@ struct RecordingDetailView: View {
             if let err = player.loadError {
                 Text("Не удалось загрузить аудио: \(err)")
                     .font(.caption)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(AppColors.red)
             }
         }
     }
@@ -265,13 +265,13 @@ struct RecordingDetailView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 10) {
                 if isError {
-                    Image(systemName: "exclamationmark.triangle").foregroundStyle(.red)
+                    Image(systemName: "exclamationmark.triangle").foregroundStyle(AppColors.red)
                 } else if showsProgress {
                     ProgressView().controlSize(.small)
                 } else {
                     Image(systemName: "clock").foregroundStyle(.secondary)
                 }
-                Text(text).foregroundStyle(isError ? .red : .secondary)
+                Text(text).foregroundStyle(isError ? AppColors.red : .secondary)
             }
             if isError, store.canRetryTranscription(rec) {
                 Button {
