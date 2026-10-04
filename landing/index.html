@@ -201,6 +201,15 @@
       transform: translateY(-2px);
     }
 
+    .caption a {
+      color: inherit;
+      text-underline-offset: 3px;
+    }
+
+    .caption a:hover {
+      color: var(--element-primary);
+    }
+
     .caption {
       font-family: "Onest", sans-serif;
       font-weight: 400;
@@ -342,7 +351,7 @@
             appleIconSvg +
             '<span>Скачать бесплатно</span>' +
           '</a>' +
-          '<p class="caption">Apple Silicon · macOS 14.6+</p>';
+          '<p class="caption">Apple Silicon · macOS 14.6+ · <a href="/install/">Как установить</a></p>';
       }
     })();
   </script>
