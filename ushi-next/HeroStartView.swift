@@ -2,11 +2,9 @@
 //  HeroStartView.swift
 //  UshiNext
 //
-//  Экран «Новая запись» по макету в Figma («Ushi», Frame 16): плашка по центру —
-//  заголовок, выбор проекта, большая кнопка записи и источники-«таблетки».
-//  Во время отсчёта на месте заголовка — цифра, во время записи — таймер;
-//  кнопка становится «отменить» / «стоп», внизу плашки — уровень звука.
-//  Размер плашки между состояниями не меняется, поэтому ничего не прыгает.
+//  Hero-стейт (§6.4, §7.1 путь 3): «Начать запись» с chip-ами пресета и Проекта.
+//  Во время отсчёта и записи — таймер, уровень и кнопка стопа (как в старом
+//  RecordingView), chip-ы показывают, куда и как идёт запись.
 //
 
 import SwiftUI
@@ -35,153 +33,120 @@ struct HeroStartView: View {
 
     private var targetProject: Project? { projects.project(id: targetProjectID) }
 
-    @Environment(\.displayScale) private var displayScale
-
     var body: some View {
-        card
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .overlay(alignment: .bottom) { savedToast }
-            .animation(.spring(duration: 0.3), value: savedRecording)
-            // Без заголовка в окне: на экране и так крупное «Новая запись».
-            .modifier(HiddenWindowTitle())
-            // Загрузка готового аудио — кнопкой справа вверху, как в Claude Code.
-            .toolbar {
-                TrailingToolbarButton(
-                    imageName: "Download",
-                    title: "Загрузить",
-                    help: "Аудио для расшифровки",
-                    isEnabled: !isActive
-                ) {
-                    importAudio()
-                }
-            }
-            .sheet(isPresented: $isCreatingProject) {
-                CreateProjectSheet(projects: projects) { project in
-                    targetProjectID = project.id
-                }
-            }
-            // Запись могли остановить из sidebar или menu bar — тост показываем всё равно.
-            .onChange(of: controller.lastSavedRecording) { _, rec in
-                guard rec != nil, let saved = controller.consumeLastSavedRecording() else { return }
-                showSavedToast(saved)
-            }
-    }
-
-    // MARK: - Плашка
-
-    private var card: some View {
-        VStack(spacing: HeroMetrics.blockSpacing) {
-            // Что и куда записываем.
-            VStack(spacing: HeroMetrics.titleSpacing) {
-                title
-                HeroProjectButton(
-                    title: (isActive ? controller.activeProject : targetProject)?.name ?? "Без проекта",
-                    isEnabled: !isActive
-                ) {
-                    projectMenu.popUp(projectMenuItems)
-                }
-                .background(PopUpMenuAnchorView(anchor: projectMenu))
-            }
-
-            // Сама запись: кнопка и источники.
-            VStack(spacing: HeroMetrics.recordSpacing) {
-                recordButton
-                VStack(spacing: 16) {
-                    sources
-                    if let errorMessage = controller.errorMessage {
-                        // Про разрешения — спокойная подсказка: macOS в этот момент сама
-                        // показывает запрос, пользователь ничего не сделал не так.
-                        Text(errorMessage)
-                            .font(.system(size: HeroMetrics.textSize))
-                            .foregroundStyle(controller.errorIsPermissionHint ? Color.secondary : AppColors.red)
-                            .multilineTextAlignment(.center)
-                            .frame(maxWidth: 280)
-                            .fixedSize(horizontal: false, vertical: true)
+        VStack(spacing: 0) {
+            // Что и куда записываем: заголовок и Проект — одним блоком над кнопкой.
+            VStack(spacing: 20) {
+                Group {
+                    if let cd = controller.countdown {
+                        Text("\(cd)")
+                            .foregroundStyle(Color.accentColor)
+                    } else if controller.isRecording {
+                        Text(formatTime(recorder.elapsed))
+                            .foregroundStyle(.primary)
+                    } else {
+                        Text("Начать запись")
+                            .foregroundStyle(.primary)
                     }
                 }
+                .font(controller.isRecording || controller.isCountingDown
+                      ? .system(size: 80, weight: .medium, design: .rounded).monospacedDigit()
+                      : .system(size: 36, weight: .semibold, design: .rounded))
+                .contentTransition(.numericText())
+                .animation(.easeInOut(duration: 0.15), value: controller.countdown)
+
+                projectChip
             }
-        }
-        .padding(.vertical, HeroMetrics.cardPaddingV)
-        .padding(.horizontal, HeroMetrics.cardPaddingH)
-        .background(cardShape.fill(Color.primary.opacity(0.04)))
-        .overlay(cardShape.strokeBorder(Color.primary.opacity(0.10), lineWidth: 1 / displayScale))
-        .overlay(alignment: .bottom) { levelMeter }
-        .animation(.easeInOut(duration: 0.2), value: controller.isRecording)
-    }
+            .padding(.bottom, 44)
+            .frame(maxHeight: .infinity, alignment: .bottom)
 
-    private var cardShape: RoundedRectangle {
-        RoundedRectangle(cornerRadius: HeroMetrics.cardRadius, style: .continuous)
-    }
-
-    /// «Новая запись»; во время отсчёта — цифра, во время записи — таймер.
-    /// Шрифт тот же, чтобы плашка не меняла высоту.
-    private var title: some View {
-        Group {
-            if let cd = controller.countdown {
-                Text("\(cd)")
-                    .foregroundStyle(AppColors.accent)
-            } else if controller.isRecording {
-                Text(formatTime(recorder.elapsed))
-                    .foregroundStyle(.primary)
-            } else {
-                Text("Новая запись")
-                    .foregroundStyle(.primary)
-            }
-        }
-        .font(.system(size: HeroMetrics.titleSize, weight: .medium).monospacedDigit())
-        .contentTransition(.numericText())
-        .animation(.easeInOut(duration: 0.15), value: controller.countdown)
-    }
-
-    private var recordButton: some View {
-        Button(action: handleTap) {
-            ZStack {
-                Circle().fill(recordFill)
-                Circle().strokeBorder(recordStroke, lineWidth: HeroMetrics.accentBorder)
-                recordGlyph
-            }
-            .frame(width: HeroMetrics.recordSize, height: HeroMetrics.recordSize)
-            .contentShape(Circle())
-            .opacity(controller.isBusy ? 0.5 : 1)
-        }
-        .buttonStyle(.plain)
-        .disabled(controller.isBusy)
-        .accessibilityLabel(controller.isRecording ? "Остановить запись"
-                            : controller.isCountingDown ? "Отменить" : "Начать запись")
-    }
-
-    // Источники — «таблетки» со значком и подписью.
-    private var sources: some View {
-        HStack(spacing: HeroMetrics.pillSpacing) {
-            ForEach(RecordingPreset.Source.available, id: \.self) { source in
-                SourcePill(
-                    source: source,
-                    isOn: presetBinding.wrappedValue.contains(source),
-                    isEnabled: !isActive
-                ) {
-                    toggleSource(source)
+            // Кнопка записи — посередине и на месте: не уезжает из-под курсора,
+            // когда заголовок сменяется таймером или внизу появляется ошибка.
+            Button(action: handleTap) {
+                ZStack {
+                    Circle()
+                        .fill(buttonFill)
+                        .frame(width: 120, height: 120)
+                    buttonGlyph
                 }
+                .opacity(controller.isBusy ? 0.5 : 1)
             }
-        }
-    }
+            .buttonStyle(.plain)
+            .disabled(controller.isBusy)
 
-    /// Уровень звука — тонкой полоской внизу плашки, только во время записи.
-    @ViewBuilder
-    private var levelMeter: some View {
-        if controller.isRecording {
-            Capsule()
-                .fill(Color.primary.opacity(0.08))
-                .frame(width: HeroMetrics.meterWidth, height: 4)
-                .overlay(alignment: .leading) {
-                    GeometryReader { geo in
-                        Capsule()
-                            .fill(levelColor)
-                            .frame(width: geo.size.width * CGFloat(recorder.level))
-                            .animation(.easeOut(duration: 0.1), value: recorder.level)
+            // Под кнопкой: источники и уровень сигнала.
+            VStack(spacing: 28) {
+                // Источники — три круглые кнопки-переключателя с подписями.
+                HStack(spacing: 16) {
+                    ForEach(RecordingPreset.Source.available, id: \.self) { source in
+                        SourceToggleButton(
+                            source: source,
+                            isOn: presetBinding.wrappedValue.contains(source),
+                            isEnabled: !isActive
+                        ) {
+                            toggleSource(source)
+                        }
                     }
                 }
-                .padding(.bottom, HeroMetrics.meterBottom)
-                .transition(.opacity)
+
+                // Индикатор уровня — заполняется от реального сигнала. Виден только
+                // во время записи; место под ним остаётся, чтобы ничего не прыгало.
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(.quaternary)
+                    .frame(width: 240, height: 8)
+                    .overlay(alignment: .leading) {
+                        GeometryReader { geo in
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(levelColor)
+                                .frame(width: geo.size.width * CGFloat(recorder.level))
+                                .animation(.easeOut(duration: 0.1), value: recorder.level)
+                        }
+                        .frame(height: 8)
+                    }
+                    .opacity(controller.isRecording ? 1 : 0)
+                    .animation(.easeInOut(duration: 0.2), value: controller.isRecording)
+                    .accessibilityHidden(!controller.isRecording)
+
+                if let errorMessage = controller.errorMessage {
+                    // Про разрешения — спокойная подсказка: macOS в этот момент сама
+                    // показывает запрос, пользователь ничего не сделал не так.
+                    Text(errorMessage)
+                        .font(.callout)
+                        .foregroundStyle(controller.errorIsPermissionHint ? Color.secondary : AppColors.red)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 24)
+                }
+            }
+            .padding(.top, 64)
+            .frame(maxHeight: .infinity, alignment: .top)
+        }
+        // Кнопка записи чуть выше середины окна.
+        .offset(y: -3)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .overlay(alignment: .bottom) { savedToast }
+        .animation(.spring(duration: 0.3), value: savedRecording)
+        // Без заголовка в окне: на экране и так крупное «Начать запись».
+        .modifier(HiddenWindowTitle())
+        // Загрузка готового аудио — кнопкой справа вверху, как в Claude Code.
+        .toolbar {
+            TrailingToolbarButton(
+                imageName: "Download",
+                title: "Загрузить",
+                help: "Аудио для расшифровки",
+                isEnabled: !isActive
+            ) {
+                importAudio()
+            }
+        }
+        .sheet(isPresented: $isCreatingProject) {
+            CreateProjectSheet(projects: projects) { project in
+                targetProjectID = project.id
+            }
+        }
+        // Запись могли остановить из sidebar или menu bar — тост показываем всё равно.
+        .onChange(of: controller.lastSavedRecording) { _, rec in
+            guard rec != nil, let saved = controller.consumeLastSavedRecording() else { return }
+            showSavedToast(saved)
         }
     }
 
@@ -203,6 +168,29 @@ struct HeroStartView: View {
                 }
             }
         )
+    }
+
+    /// Куда пойдёт запись — такой же кнопкой, как «Загрузить»: папка, название
+    /// и стрелка; по клику — список Проектов.
+    private var projectChip: some View {
+        let shown = isActive ? controller.activeProject : targetProject
+        return ClaudeButton(isEnabled: !isActive, action: { projectMenu.popUp(projectMenuItems) }) {
+            HStack(spacing: 6) {
+                Image("FolderClosed")
+                    .resizable()
+                    .renderingMode(.template)
+                    .scaledToFit()
+                    .frame(width: 16, height: 16)
+                Text(shown?.name ?? "Без проекта")
+                    .font(.system(size: 13))
+                    .lineLimit(1)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 9, weight: .semibold))
+            }
+        }
+        .background(PopUpMenuAnchorView(anchor: projectMenu))
+        .fixedSize()
+        .accessibilityLabel("Проект: \(shown?.name ?? "Без проекта")")
     }
 
     private var projectMenuItems: [PopUpMenuItem] {
@@ -286,35 +274,29 @@ struct HeroStartView: View {
         Task { await controller.start(preset: preset, project: project) }
     }
 
-    /// Ожидание — голубая рамка и точка; отсчёт — серая с крестиком («отменить»);
-    /// запись — красная с квадратом «стоп».
-    private var recordFill: Color {
-        if controller.isRecording { return AppColors.red.opacity(0.2) }
-        if controller.isCountingDown { return Color.primary.opacity(0.06) }
+    private var buttonFill: Color {
+        if controller.isRecording { return AppColors.red }
+        if controller.isCountingDown { return .secondary.opacity(0.6) }
         return AppColors.accentFill
     }
 
-    private var recordStroke: Color {
-        if controller.isRecording { return AppColors.red }
-        if controller.isCountingDown { return Color.primary.opacity(0.25) }
-        return AppColors.accent
-    }
-
     @ViewBuilder
-    private var recordGlyph: some View {
+    private var buttonGlyph: some View {
         if controller.isRecording {
-            RoundedRectangle(cornerRadius: 7, style: .continuous)
-                .fill(AppColors.red)
-                .frame(width: HeroMetrics.stopSize, height: HeroMetrics.stopSize)
+            Image(systemName: "stop.fill")
+                .font(.system(size: 44))
+                .foregroundStyle(.white)
         } else if controller.isCountingDown {
-            // Крестик, а не «стоп»: запись ещё не началась.
+            // X = «отменить отсчёт»: визуально это не stop, не вводит в заблуждение
+            // «уже идёт запись».
             Image(systemName: "xmark")
-                .font(.system(size: 28, weight: .semibold))
-                .foregroundStyle(.secondary)
+                .font(.system(size: 40, weight: .semibold))
+                .foregroundStyle(.white)
         } else {
-            Circle()
-                .fill(AppColors.accent)
-                .frame(width: HeroMetrics.dotSize, height: HeroMetrics.dotSize)
+            // Красная точка = универсальный «record» (Voice Memos / QuickTime).
+            Image(systemName: "circle.fill")
+                .font(.system(size: 40))
+                .foregroundStyle(AppColors.recordDot)
         }
     }
 
@@ -400,88 +382,9 @@ struct HeroStartView: View {
     }
 }
 
-// MARK: - Размеры
-
-/// Размеры по макету в Figma, × 0,6: макет нарисован крупнее окна, а так плашка
-/// помещается и в самое маленькое окно, текст — 12 pt. В комментариях — значения
-/// из макета.
-private enum HeroMetrics {
-    static let cardRadius: CGFloat = 24        // 40
-    static let cardPaddingV: CGFloat = 48      // 80
-    static let cardPaddingH: CGFloat = 96      // 160
-    static let blockSpacing: CGFloat = 48      // 80: заголовок с проектом ↔ кнопка записи
-    static let titleSpacing: CGFloat = 24      // 40: заголовок ↔ проект
-    static let recordSpacing: CGFloat = 72     // 120: кнопка записи ↔ источники
-    static let titleSize: CGFloat = 34         // 56
-    static let textSize: CGFloat = 12          // 20
-    static let iconSize: CGFloat = 14          // 24
-    static let symbolSize: CGFloat = 12
-    static let iconSpacing: CGFloat = 5        // 8
-    static let projectRadius: CGFloat = 10     // 16
-    static let projectPaddingH: CGFloat = 15   // 24 + рамка
-    static let projectPaddingV: CGFloat = 10   // 16 + рамка
-    static let recordSize: CGFloat = 124       // 206
-    static let dotSize: CGFloat = 46           // 76
-    static let stopSize: CGFloat = 38
-    static let accentBorder: CGFloat = 1.25    // 2
-    static let pillSpacing: CGFloat = 7        // 12
-    static let pillPaddingH: CGFloat = 11      // 16 + рамка
-    static let pillPaddingV: CGFloat = 8.5     // 12 + рамка
-    static let meterWidth: CGFloat = 160
-    static let meterBottom: CGFloat = 20
-}
-
-// MARK: - Кнопка проекта
-
-/// Куда пойдёт запись: папка, название и стрелка на полупрозрачной плашке
-/// с тонкой рамкой; по клику — список проектов.
-private struct HeroProjectButton: View {
-    let title: String
-    let isEnabled: Bool
-    let action: () -> Void
-
-    @State private var isHovered = false
-    @Environment(\.displayScale) private var displayScale
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: HeroMetrics.iconSpacing) {
-                Image("FolderOpen")
-                    .resizable()
-                    .renderingMode(.template)
-                    .scaledToFit()
-                    .frame(width: HeroMetrics.iconSize, height: HeroMetrics.iconSize)
-                Text(title)
-                    .font(.system(size: HeroMetrics.textSize))
-                    .lineLimit(1)
-                    .frame(maxWidth: 200)
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 9, weight: .semibold))
-            }
-            .foregroundStyle(AppColors.accent)
-            .padding(.horizontal, HeroMetrics.projectPaddingH)
-            .padding(.vertical, HeroMetrics.projectPaddingV)
-            .background(shape.fill(Color.primary.opacity(isHovered && isEnabled ? 0.08 : 0.04)))
-            .overlay(shape.strokeBorder(Color.primary.opacity(0.10), lineWidth: 1 / displayScale))
-            .contentShape(shape)
-        }
-        .buttonStyle(.plain)
-        .disabled(!isEnabled)
-        .opacity(isEnabled ? 1 : 0.5)
-        .onHover { isHovered = $0 }
-        .accessibilityLabel("Проект: \(title)")
-    }
-
-    private var shape: RoundedRectangle {
-        RoundedRectangle(cornerRadius: HeroMetrics.projectRadius, style: .continuous)
-    }
-}
-
-// MARK: - Источник
-
-/// Источник записи — «таблетка» со значком и подписью: включён — голубая рамка
-/// и подложка, выключен — серая.
-private struct SourcePill: View {
+/// Круглая кнопка-переключатель источника с подписью снизу, как в Telegram:
+/// включена — залита акцентом, выключена — серая.
+private struct SourceToggleButton: View {
     let source: RecordingPreset.Source
     let isOn: Bool
     let isEnabled: Bool
@@ -489,30 +392,27 @@ private struct SourcePill: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: HeroMetrics.iconSpacing) {
+            VStack(spacing: 8) {
                 Image(systemName: source.systemImage)
-                    .font(.system(size: HeroMetrics.symbolSize, weight: .medium))
-                    .frame(minWidth: HeroMetrics.iconSize, minHeight: HeroMetrics.iconSize)
+                    .font(.system(size: 17, weight: .medium))
+                    .foregroundStyle(isOn ? AppColors.accentGlyph : Color.secondary)
+                    .frame(width: 44, height: 44)
+                    .background(Circle().fill(isOn ? AppColors.accentFill : Color.secondary.opacity(0.18)))
                 Text(source.shortTitle)
-                    .font(.system(size: HeroMetrics.textSize))
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .fixedSize()
             }
-            .foregroundStyle(isOn ? AppColors.accent : Color.primary.opacity(0.8))
-            .padding(.horizontal, HeroMetrics.pillPaddingH)
-            .padding(.vertical, HeroMetrics.pillPaddingV)
-            .background {
-                ZStack {
-                    Capsule().fill(Color.primary.opacity(0.04))
-                    if isOn { Capsule().fill(AppColors.accentFill) }
-                }
-            }
-            .overlay(Capsule().strokeBorder(isOn ? AppColors.accent : Color.clear, lineWidth: HeroMetrics.accentBorder))
-            .contentShape(Capsule())
+            .frame(width: 72)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .disabled(!isEnabled)
-        .opacity(isEnabled ? 1 : 0.5)
+        .opacity(isEnabled ? 1 : 0.6)
         .help(isOn ? "\(source.title): включено" : "\(source.title): выключено")
         .accessibilityLabel(source.title)
         .accessibilityValue(isOn ? "включено" : "выключено")
     }
 }
+
