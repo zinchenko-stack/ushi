@@ -165,6 +165,8 @@
       padding-top: 8px;
     }
 
+    #platform-action { padding-top: 0; }
+
     .cta {
       display: inline-flex;
       align-items: center;
@@ -201,14 +203,21 @@
       transform: translateY(-2px);
     }
 
-    .caption a {
-      color: inherit;
-      text-underline-offset: 3px;
+    .install-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 44px;
+      padding: 0 8px;
+      color: var(--element-primary);
+      font-size: 16px;
+      line-height: 24px;
+      text-decoration: underline;
+      text-underline-offset: 4px;
     }
 
-    .caption a:hover {
-      color: var(--element-primary);
-    }
+    .install-link:hover { color: var(--element-secondary); }
+    a:focus-visible { outline: 2px solid currentColor; outline-offset: 5px; }
 
     .caption {
       font-family: "Onest", sans-serif;
@@ -313,7 +322,11 @@
     <p class="lead">Приложение, которое записывает звук и экран для важного, и превращает это в текст с удобным поиском.</p>
 
     <div class="action" id="action">
-      <!-- populated by platform-detect script below -->
+      <div class="action" id="platform-action">
+        <a class="cta" href="https://github.com/zinchenko-stack/ushi/releases/latest/download/ushi.dmg">Скачать бесплатно</a>
+        <p class="caption">Apple Silicon · macOS 14.6+</p>
+      </div>
+      <a class="install-link" href="/install/">Как установить <span aria-hidden="true">→</span></a>
     </div>
   </main>
   <script>
@@ -332,7 +345,7 @@
         isWindows = /Win/.test(plt) || /Windows/.test(ua);
       }
 
-      var action = document.getElementById('action');
+      var action = document.getElementById('platform-action');
 
       var appleIconSvg = '<svg class="apple-icon" viewBox="0 0 13.838 17" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M13.3977 5.7953C13.2991 5.8718 11.5583 6.8527 11.5583 9.0338C11.5583 11.5566 13.7734 12.4491 13.8397 12.4712C13.8295 12.5256 13.4878 13.6935 12.6718 14.8835C11.9442 15.9307 11.1843 16.9762 10.0283 16.9762C8.8723 16.9762 8.5748 16.3047 7.2403 16.3047C5.9398 16.3047 5.4774 16.9983 4.42 16.9983C3.3626 16.9983 2.6248 16.0293 1.7765 14.8393C0.7939 13.4419 0 11.271 0 9.2106C0 5.9058 2.1488 4.1531 4.2636 4.1531C5.3873 4.1531 6.324 4.8909 7.0295 4.8909C7.701 4.8909 8.7482 4.1089 10.0266 4.1089C10.5111 4.1089 12.2519 4.1531 13.3977 5.7953ZM9.4197 2.7098C9.9484 2.0825 10.3224 1.2121 10.3224 0.3417C10.3224 0.221 10.3122 0.0986 10.2901 0C9.4299 0.0323 8.4065 0.5729 7.7894 1.2886C7.3049 1.8394 6.8527 2.7098 6.8527 3.5921C6.8527 3.7247 6.8748 3.8573 6.885 3.8998C6.9394 3.91 7.0278 3.9219 7.1162 3.9219C7.888 3.9219 8.8587 3.4051 9.4197 2.7098Z" fill="currentColor"/></svg>';
 
@@ -351,7 +364,7 @@
             appleIconSvg +
             '<span>Скачать бесплатно</span>' +
           '</a>' +
-          '<p class="caption">Apple Silicon · macOS 14.6+ · <a href="/install/">Как установить</a></p>';
+          '<p class="caption">Apple Silicon · macOS 14.6+</p>';
       }
     })();
   </script>
