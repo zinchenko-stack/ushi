@@ -6,7 +6,7 @@
   <title>Как установить Ushi</title>
   <meta name="description" content="Установка Ushi на Mac по шагам: скачать, перетащить в «Программы», разрешить запуск и доступ к звуку.">
   <meta property="og:title" content="Как установить Ushi">
-  <meta property="og:description" content="От скачивания до первой записи — в пяти шагах.">
+  <meta property="og:description" content="От скачивания до первой записи — в четырёх шагах.">
   <meta property="og:type" content="article">
   <meta property="og:url" content="https://ushi.zinchenko.cc/install/">
   <meta property="og:image" content="https://ushi.zinchenko.cc/og-image-v2.png">
@@ -18,7 +18,7 @@
   <link rel="apple-touch-icon" href="/apple-touch-icon-v2.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Onest:wght@400..500&family=Unbounded:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Onest:wght@400..600&family=Unbounded:wght@400;500&display=swap" rel="stylesheet">
   <style>
     :root {
       --bg: #f6f5f4;
@@ -53,180 +53,169 @@
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
-    html, body {
+    html { background: var(--bg); color: var(--element-primary); }
+    body {
       font-family: "Onest", -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
-      background: var(--bg);
-      color: var(--element-primary);
       -webkit-font-smoothing: antialiased;
       -moz-osx-font-smoothing: grayscale;
+      padding: 40px 24px 80px;
     }
-
-    body {
-      padding: 40px 24px 72px;
-    }
-
-    main {
-      max-width: 760px;
-      margin: 0 auto;
-    }
-
+    main { max-width: 800px; margin: 0 auto; }
     a { color: inherit; }
+    a:focus-visible { outline: 2px solid currentColor; outline-offset: 5px; }
 
-    /* Возврат на главную остаётся заметным и без логотипа. */
     .home {
       display: inline-flex;
       align-items: center;
       min-height: 44px;
       gap: 8px;
       color: var(--element-secondary);
-      font-size: 16px;
+      font-size: 15px;
       text-decoration: none;
     }
-
     .home:hover { color: var(--element-primary); }
-    a:focus-visible { outline: 2px solid currentColor; outline-offset: 5px; }
 
     h1 {
       font-family: "Unbounded", sans-serif;
       font-weight: 400;
-      font-size: 44px;
-      line-height: 56px;
-      margin: 40px 0 16px;
+      font-size: 40px;
+      line-height: 1.3;
+      letter-spacing: -0.025em;
+      text-wrap: balance;
+      margin: 32px 0 12px;
     }
-
     .lead {
-      font-size: 18px;
-      line-height: 30px;
-      letter-spacing: -0.36px;
+      font-size: 17px;
+      line-height: 1.6;
       color: var(--element-secondary);
-      max-width: 560px;
     }
 
-    /* Шаги */
     .steps {
       list-style: none;
       counter-reset: step;
-      margin-top: 48px;
-      display: flex;
-      flex-direction: column;
-      gap: 20px;
+      margin-top: 40px;
+      display: grid;
+      gap: 24px;
     }
-
     .step {
       counter-increment: step;
       background: var(--container-primary);
-      border-radius: 28px;
-      padding: 32px;
+      border-radius: 24px;
+      padding: 36px;
     }
-
     .step h2 {
       display: flex;
-      align-items: center;
-      gap: 14px;
-      font-family: "Unbounded", sans-serif;
+      align-items: baseline;
+      gap: 16px;
       font-weight: 500;
-      font-size: 22px;
-      line-height: 30px;
+      font-size: 26px;
+      line-height: 1.3;
+      letter-spacing: -0.025em;
     }
-
     .step h2::before {
       content: counter(step);
-      flex-shrink: 0;
-      width: 36px;
-      height: 36px;
-      border-radius: 12px;
-      background: var(--element-primary);
-      color: var(--bg);
-      font-family: "Onest", sans-serif;
-      font-size: 17px;
+      flex: 0 0 32px;
+      height: 32px;
+      border-radius: 10px;
+      background: var(--bg);
+      color: var(--element-secondary);
+      font-size: 15px;
       font-weight: 500;
-      display: grid;
-      place-items: center;
+      line-height: 32px;
+      text-align: center;
+      letter-spacing: 0;
+      align-self: flex-start;
     }
-
+    .step-content { margin: 20px 0 0 48px; }
     .step p {
       font-size: 17px;
-      line-height: 28px;
-      letter-spacing: -0.2px;
-      margin-top: 14px;
-      max-width: 620px;
+      line-height: 1.65;
+      max-width: 62ch;
+      text-wrap: pretty;
     }
+    .step p + p { margin-top: 12px; }
+    .step b { font-weight: 600; }
+    .step .note { color: var(--element-secondary); font-size: 15px; line-height: 1.6; }
 
-    .step p + p { margin-top: 10px; }
-
-    .step b { font-weight: 500; }
-
-    .note {
-      color: var(--element-secondary);
-      font-size: 15px !important;
-      line-height: 24px !important;
-    }
-
-    figure {
-      margin-top: 24px;
-      margin-bottom: 8px;
-      display: flex;
-      justify-content: center;
-      gap: 16px;
-      flex-wrap: wrap;
-    }
-
-    figure img {
+    figure { margin: 28px 0; }
+    .step-content > :last-child { margin-bottom: 0; }
+    .shot {
       display: block;
-      height: auto;
-      max-width: 100%;
-    }
-
-    /* Снимки в натуральную величину (сняты на Retina, 2×); тень — своя, ровная. */
-    .shot-window, .shot-dialog {
-      filter: drop-shadow(0 10px 24px rgba(0, 0, 0, 0.14)) drop-shadow(0 1px 2px rgba(0, 0, 0, 0.12));
-    }
-    .shot-crop {
       width: 100%;
-      border-radius: 14px;
-      border: 1px solid var(--border);
+      margin-inline: auto;
+      text-decoration: none;
+      cursor: zoom-in;
     }
+    .shot--dialog { max-width: 288px; --corner: 60; }
+    .shot--window { max-width: 100%; --corner: 40; }
+    /* Viewport over an unchanged Retina original: scale both axes equally.
+       Pixel coordinates identify the window or relevant panel, not a redrawn UI. */
+    .shot-frame {
+      display: block;
+      position: relative;
+      width: 100%;
+      aspect-ratio: var(--crop-w) / var(--crop-h);
+      border-radius: calc(100% * var(--corner) / var(--crop-w)) / calc(100% * var(--corner) / var(--crop-h));
+      overflow: hidden;
+    }
+    .shot--detail .shot-frame {
+      border-radius: 12px;
+      box-shadow: 0 0 0 1px var(--border);
+    }
+    .shot-frame img {
+      display: block;
+      position: absolute;
+      width: calc(100% * var(--source-w) / var(--crop-w));
+      max-width: none;
+      height: auto;
+      left: calc(-100% * var(--crop-x) / var(--crop-w));
+      top: calc(-100% * var(--crop-y) / var(--crop-h));
+    }
+    .permissions {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 24px;
+      align-items: start;
+    }
+    .permissions .shot { max-width: 304px; }
 
     .cta {
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      gap: 12px;
-      margin-top: 20px;
+      gap: 10px;
+      margin-bottom: 20px;
       background: linear-gradient(to bottom, var(--cta-from), var(--cta-to));
       color: var(--cta-text);
       text-decoration: none;
       min-height: 48px;
-      padding: 12px 40px;
-      border-radius: 16px;
-      font-weight: 450;
+      padding: 12px 28px;
+      border-radius: 14px;
+      font-weight: 500;
       font-size: 16px;
       line-height: 24px;
-      letter-spacing: -0.32px;
-      transition: filter 0.15s ease, transform 0.15s ease;
+      transition: filter 0.15s ease;
     }
-
     .cta:hover { filter: var(--cta-hover); }
-    .cta:active { transform: scale(0.98); }
-
-    .cta svg {
-      width: 16px;
-      height: 20px;
-      display: block;
-      transform: translateY(-2px);
-    }
+    .cta svg { width: 16px; height: 20px; display: block; flex-shrink: 0; }
 
     @media (max-width: 640px) {
-      body { padding: 28px 16px 56px; }
-      h1 { font-size: 32px; line-height: 40px; margin-top: 28px; }
-      .lead { font-size: 17px; line-height: 26px; }
-      .steps { margin-top: 32px; gap: 14px; }
-      .step { padding: 22px 18px; border-radius: 22px; }
-      .step h2 { font-size: 19px; line-height: 26px; gap: 12px; }
-      .step h2::before { width: 32px; height: 32px; border-radius: 10px; font-size: 16px; }
-      .step p { font-size: 16px; line-height: 26px; }
-      .shot-dialog { max-width: 100%; }
-      .cta { padding: 12px 24px; max-width: 100%; }
+      body { padding: 24px 16px 48px; }
+      h1 { font-size: 30px; line-height: 1.35; margin-top: 24px; }
+      .lead { font-size: 16px; }
+      .steps { margin-top: 28px; gap: 16px; }
+      .step { padding: 24px; border-radius: 20px; }
+      .step h2 { font-size: 23px; gap: 12px; }
+      .step h2::before { flex-basis: 28px; height: 28px; line-height: 28px; border-radius: 8px; }
+      .step-content { margin: 16px 0 0; }
+      .step p { font-size: 16px; line-height: 1.65; }
+      figure { margin: 24px 0; }
+      .permissions { grid-template-columns: 1fr; gap: 24px; }
+      .cta { padding-inline: 24px; max-width: 100%; }
+    }
+    @media (max-width: 360px) {
+      .step { padding: 20px; }
+      .step h2 { font-size: 21px; }
     }
   </style>
 </head>
@@ -240,56 +229,80 @@
     <ol class="steps">
       <li class="step">
         <h2>Скачайте и установите</h2>
-        <a class="cta" href="https://github.com/zinchenko-stack/ushi/releases/latest/download/ushi.dmg">
-          <svg viewBox="0 0 13.838 17" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M13.3977 5.7953C13.2991 5.8718 11.5583 6.8527 11.5583 9.0338C11.5583 11.5566 13.7734 12.4491 13.8397 12.4712C13.8295 12.5256 13.4878 13.6935 12.6718 14.8835C11.9442 15.9307 11.1843 16.9762 10.0283 16.9762C8.8723 16.9762 8.5748 16.3047 7.2403 16.3047C5.9398 16.3047 5.4774 16.9983 4.42 16.9983C3.3626 16.9983 2.6248 16.0293 1.7765 14.8393C0.7939 13.4419 0 11.271 0 9.2106C0 5.9058 2.1488 4.1531 4.2636 4.1531C5.3873 4.1531 6.324 4.8909 7.0295 4.8909C7.701 4.8909 8.7482 4.1089 10.0266 4.1089C10.5111 4.1089 12.2519 4.1531 13.3977 5.7953ZM9.4197 2.7098C9.9484 2.0825 10.3224 1.2121 10.3224 0.3417C10.3224 0.221 10.3122 0.0986 10.2901 0C9.4299 0.0323 8.4065 0.5729 7.7894 1.2886C7.3049 1.8394 6.8527 2.7098 6.8527 3.5921C6.8527 3.7247 6.8748 3.8573 6.885 3.8998C6.9394 3.91 7.0278 3.9219 7.1162 3.9219C7.888 3.9219 8.8587 3.4051 9.4197 2.7098Z" fill="currentColor"/></svg>
-          <span>Скачать бесплатно</span>
-        </a>
-        <p>Откройте скачанный <b>ushi.dmg</b> и перетащите Ushi в «Программы».</p>
-        <figure>
-          <img class="shot-window" src="/install/img/1-dmg.png" width="612" height="382" alt="Перетащите значок Ushi на папку «Программы»" loading="lazy">
-        </figure>
+        <div class="step-content">
+          <a class="cta" href="https://github.com/zinchenko-stack/ushi/releases/latest/download/ushi.dmg">
+            <svg viewBox="0 0 13.838 17" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M13.3977 5.7953C13.2991 5.8718 11.5583 6.8527 11.5583 9.0338C11.5583 11.5566 13.7734 12.4491 13.8397 12.4712C13.8295 12.5256 13.4878 13.6935 12.6718 14.8835C11.9442 15.9307 11.1843 16.9762 10.0283 16.9762C8.8723 16.9762 8.5748 16.3047 7.2403 16.3047C5.9398 16.3047 5.4774 16.9983 4.42 16.9983C3.3626 16.9983 2.6248 16.0293 1.7765 14.8393C0.7939 13.4419 0 11.271 0 9.2106C0 5.9058 2.1488 4.1531 4.2636 4.1531C5.3873 4.1531 6.324 4.8909 7.0295 4.8909C7.701 4.8909 8.7482 4.1089 10.0266 4.1089C10.5111 4.1089 12.2519 4.1531 13.3977 5.7953ZM9.4197 2.7098C9.9484 2.0825 10.3224 1.2121 10.3224 0.3417C10.3224 0.221 10.3122 0.0986 10.2901 0C9.4299 0.0323 8.4065 0.5729 7.7894 1.2886C7.3049 1.8394 6.8527 2.7098 6.8527 3.5921C6.8527 3.7247 6.8748 3.8573 6.885 3.8998C6.9394 3.91 7.0278 3.9219 7.1162 3.9219C7.888 3.9219 8.8587 3.4051 9.4197 2.7098Z" fill="currentColor"/></svg>
+            <span>Скачать бесплатно</span>
+          </a>
+          <p>Откройте скачанный <b>ushi.dmg</b> и перетащите Ushi в «Программы».</p>
+          <figure>
+            <a class="shot shot--window" href="/install/img/install-dmg-original.png" target="_blank" rel="noopener" aria-label="Увеличить: Перетащите значок Ushi на папку «Программы»" title="Открыть снимок в полном размере">
+              <span class="shot-frame" style="--source-w: 1504; --crop-x: 112; --crop-y: 76; --crop-w: 1280; --crop-h: 800">
+                <img src="/install/img/install-dmg-original.png" width="1504" height="1024" alt="Перетащите значок Ushi на папку «Программы»" loading="lazy">
+              </span>
+            </a>
+          </figure>
+        </div>
       </li>
 
       <li class="step">
         <h2>Откройте Ushi</h2>
-        <p>Запустите Ushi из «Программ». Если появится предупреждение «Файл „Ushi“ не был открыт», нажмите <b>«Готово»</b>.</p>
-        <figure>
-          <img class="shot-dialog" src="/install/img/2-warning.png" width="304" height="336" alt="Предупреждение macOS: выделена кнопка «Готово»" loading="lazy">
-        </figure>
-        <p>Откройте <b>Системные настройки → Конфиденциальность и безопасность</b>. В разделе «Безопасность» нажмите <b>«Все равно открыть»</b>.</p>
-        <figure>
-          <img class="shot-crop" src="/install/img/4-privacy.png" width="719" height="174" alt="Кнопка «Все равно открыть» в разделе «Безопасность»" loading="lazy">
-        </figure>
-        <p>Подтвердите открытие и введите пароль от Mac или используйте Touch ID.</p>
-        <p class="note">Разрешить запуск нужно только один раз. Если Ushi уже открылось, переходите дальше.</p>
+        <div class="step-content">
+          <p>Запустите Ushi из «Программ». Если появится предупреждение «Файл „Ushi“ не был открыт», нажмите <b>«Готово»</b>.</p>
+          <figure>
+            <a class="shot shot--dialog" href="/install/img/launch-warning-original.png" target="_blank" rel="noopener" aria-label="Увеличить: Предупреждение macOS: кнопка «Готово» внизу окна" title="Открыть снимок в полном размере">
+              <span class="shot-frame" style="--source-w: 832; --crop-x: 112; --crop-y: 76; --crop-w: 608; --crop-h: 672">
+                <img src="/install/img/launch-warning-original.png" width="832" height="896" alt="Предупреждение macOS: кнопка «Готово» внизу окна" loading="lazy">
+              </span>
+            </a>
+          </figure>
+          <p>Откройте <b>Системные настройки → Конфиденциальность и безопасность</b>. В разделе «Безопасность» нажмите <b>«Все равно открыть»</b>.</p>
+          <figure>
+            <a class="shot shot--window shot--detail" href="/install/img/security-settings-original.png" target="_blank" rel="noopener" aria-label="Увеличить: Кнопка «Все равно открыть» в разделе «Безопасность»" title="Открыть снимок в полном размере">
+              <span class="shot-frame" style="--source-w: 1914; --crop-x: 672; --crop-y: 792; --crop-w: 1116; --crop-h: 428">
+                <img src="/install/img/security-settings-original.png" width="1914" height="1806" alt="Кнопка «Все равно открыть» в разделе «Безопасность»" loading="lazy">
+              </span>
+            </a>
+          </figure>
+          <p>Подтвердите открытие и введите пароль от Mac или используйте Touch ID.</p>
+          <p class="note">Разрешить запуск нужно только один раз. Если Ushi уже открылось, переходите дальше.</p>
+        </div>
       </li>
 
       <li class="step">
         <h2>Подготовьте расшифровку</h2>
-        <p>При первом запуске Ushi скачает модель распознавания речи — <b>1,6&nbsp;ГБ</b>.</p>
-        <p>Чтобы записывать во время загрузки, нажмите <b>«Свернуть и пользоваться сейчас»</b>. Расшифровка начнётся после скачивания модели.</p>
-        <figure>
-          <img class="shot-window" src="/install/img/6-model.png" width="640" height="321" alt="Подготовка Ushi: загрузка модели и кнопка «Свернуть и пользоваться сейчас»" loading="lazy">
-        </figure>
+        <div class="step-content">
+          <p>При первом запуске Ushi скачает модель распознавания речи — <b>1,6&nbsp;ГБ</b>.</p>
+          <p>Чтобы записывать во время загрузки, нажмите <b>«Свернуть и пользоваться сейчас»</b>. Расшифровка начнётся после скачивания модели.</p>
+          <figure>
+            <a class="shot shot--window" href="/install/img/model-download-original.png" target="_blank" rel="noopener" aria-label="Увеличить: Подготовка Ushi: загрузка модели и кнопка «Свернуть и пользоваться сейчас»" title="Открыть снимок в полном размере">
+              <span class="shot-frame" style="--source-w: 2024; --crop-x: 112; --crop-y: 76; --crop-w: 1800; --crop-h: 904">
+                <img src="/install/img/model-download-original.png" width="2024" height="1128" alt="Подготовка Ushi: загрузка модели и кнопка «Свернуть и пользоваться сейчас»" loading="lazy">
+              </span>
+            </a>
+          </figure>
+        </div>
       </li>
 
       <li class="step">
         <h2>Начните запись</h2>
-        <p>Нажмите круглую кнопку записи. При запросе доступа к микрофону и системному звуку выберите <b>«Разрешить»</b>: так запишутся ваш голос и звук с компьютера.</p>
-        <figure>
-          <img class="shot-dialog" src="/install/img/8-mic.png" width="304" height="264" alt="Разрешение на доступ к микрофону" loading="lazy">
-          <img class="shot-dialog" src="/install/img/9-system-audio.png" width="304" height="302" alt="Разрешение на запись системного звука" loading="lazy">
-        </figure>
+        <div class="step-content">
+          <p>Нажмите круглую кнопку записи. При запросе доступа к микрофону и системному звуку выберите <b>«Разрешить»</b>: так запишутся ваш голос и звук с компьютера.</p>
+          <figure class="permissions">
+            <a class="shot shot--dialog" href="/install/img/microphone-permission-original.png" target="_blank" rel="noopener" aria-label="Увеличить: Разрешение на доступ к микрофону" title="Открыть снимок в полном размере">
+              <span class="shot-frame" style="--source-w: 832; --crop-x: 112; --crop-y: 76; --crop-w: 608; --crop-h: 528">
+                <img src="/install/img/microphone-permission-original.png" width="832" height="752" alt="Разрешение на доступ к микрофону" loading="lazy">
+              </span>
+            </a>
+            <a class="shot shot--dialog" href="/install/img/audio-permission-original.png" target="_blank" rel="noopener" aria-label="Увеличить: Разрешение на запись системного звука" title="Открыть снимок в полном размере">
+              <span class="shot-frame" style="--source-w: 832; --crop-x: 112; --crop-y: 76; --crop-w: 608; --crop-h: 604">
+                <img src="/install/img/audio-permission-original.png" width="832" height="828" alt="Разрешение на запись системного звука" loading="lazy">
+              </span>
+            </a>
+          </figure>
+        </div>
       </li>
 
-      <li class="step">
-        <h2>Сохраните запись</h2>
-        <p>Нажмите <b>■</b>, чтобы остановить запись. Она появится в списке слева, а после расшифровки там же можно будет открыть текст.</p>
-        <figure>
-          <img class="shot-window" src="/install/img/10-recording.png" width="645" height="403" alt="Во время записи круглая кнопка меняется на квадратную кнопку остановки" loading="lazy">
-        </figure>
-        <p class="note">Аудио и расшифровки хранятся на вашем Mac.</p>
-      </li>
     </ol>
   </main>
 </body>
