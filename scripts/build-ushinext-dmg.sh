@@ -40,6 +40,7 @@ RW_DMG="$RELEASE_DIR/ushi-rw.dmg"
 rm -f "$RELEASE_DIR/ushi.dmg" "$RW_DMG"
 "$DMG_VENV/bin/dmgbuild" -s "$ROOT_DIR/release/dmg/settings.py" \
   -D app="$APP_PATH" -D background="$RELEASE_DIR/dmg-background.tiff" -D format=UDRW \
+  -D volume_icon="$ROOT_DIR/release/dmg/VolumeIcon.icns" \
   Ushi "$RW_DMG"
 
 # macOS 26.2+ показывает пустое окно вместо фона, если в .DS_Store есть запись

@@ -11,7 +11,9 @@ appname = os.path.basename(application)
 format = defines.get('format', 'UDZO')
 files = [application]
 symlinks = {'Программы': '/Applications'}
-icon = os.path.join(application, 'Contents', 'Resources', 'AppIcon.icns')
+# Иконка диска — скруглённая (scripts/make-volume-icon.swift): иконка приложения
+# квадратная во весь размер, и на рабочем столе диск выглядел квадратом.
+icon = defines['volume_icon']
 background = defines['background']
 
 window_rect = ((200, 160), (640, 400))
