@@ -36,10 +36,31 @@ if [[ ! -x "$DMG_VENV/bin/dmgbuild" ]]; then
 fi
 tiffutil -cathidpicheck "$ROOT_DIR/release/dmg/background.png" \
   "$ROOT_DIR/release/dmg/background@2x.png" -out "$RELEASE_DIR/dmg-background.tiff"
-rm -f "$RELEASE_DIR/ushi.dmg"
+RW_DMG="$RELEASE_DIR/ushi-rw.dmg"
+rm -f "$RELEASE_DIR/ushi.dmg" "$RW_DMG"
 "$DMG_VENV/bin/dmgbuild" -s "$ROOT_DIR/release/dmg/settings.py" \
-  -D app="$APP_PATH" -D background="$RELEASE_DIR/dmg-background.tiff" \
-  Ushi "$RELEASE_DIR/ushi.dmg"
+  -D app="$APP_PATH" -D background="$RELEASE_DIR/dmg-background.tiff" -D format=UDRW \
+  Ushi "$RW_DMG"
+
+# macOS 26.2+ показывает пустое окно вместо фона, если в .DS_Store есть запись
+# pBBk (закладка на фон). dmgbuild до 1.6.7 её пишет, а 1.6.7 требует Python 3.10+,
+# которого в системе нет. Убираем запись сами: фон всё равно находится по icvp.
+MOUNT_DIR="$(mktemp -d "${TMPDIR:-/tmp}/ushi-dmg-mnt.XXXXXX")"
+hdiutil attach -nobrowse -noverify -noautoopen -readwrite -mountpoint "$MOUNT_DIR" "$RW_DMG" >/dev/null
+"$DMG_VENV/bin/python" - "$MOUNT_DIR/.DS_Store" <<'PY'
+import sys
+from ds_store import DSStore
+with DSStore.open(sys.argv[1], "r+") as d:
+    if any(e.filename == "." and e.code == b"pBBk" for e in d):
+        d.delete(".", b"pBBk")
+with DSStore.open(sys.argv[1], "r") as d:
+    if any(e.code == b"pBBk" for e in d):
+        sys.exit("pBBk не удалилась из .DS_Store")
+PY
+hdiutil detach "$MOUNT_DIR" -quiet
+rmdir "$MOUNT_DIR"
+hdiutil convert "$RW_DMG" -format UDZO -imagekey zlib-level=9 -o "$RELEASE_DIR/ushi.dmg" >/dev/null
+rm -f "$RW_DMG"
 hdiutil verify "$RELEASE_DIR/ushi.dmg"
 shasum -a 256 "$RELEASE_DIR/ushi.dmg" > "$RELEASE_DIR/ushi.dmg.sha256"
 

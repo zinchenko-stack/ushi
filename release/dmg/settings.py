@@ -6,7 +6,9 @@ import os.path
 application = defines['app']
 appname = os.path.basename(application)
 
-format = 'UDZO'
+# Скрипт сборки просит UDRW: после dmgbuild из .DS_Store убирается запись pBBk
+# (см. build-ushinext-dmg.sh), потом образ сжимается в UDZO.
+format = defines.get('format', 'UDZO')
 files = [application]
 symlinks = {'Программы': '/Applications'}
 icon = os.path.join(application, 'Contents', 'Resources', 'AppIcon.icns')
