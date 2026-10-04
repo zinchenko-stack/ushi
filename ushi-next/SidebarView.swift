@@ -626,16 +626,13 @@ enum AppColors {
     /// Разделители — тонкие линии в один пиксель (см. HairlineDivider).
     static let divider = pair(dark: 0x292929, light: 0xDEDEDE)
 
-    /// Акцент на кнопках (запись, включённые источники): приглушённая подложка
-    /// и значок в тон, а не яркий системный синий. В тёмной теме — как у
-    /// Claude Code (#042040 / #6CA4EC), в светлой — светло-голубая с синим.
-    static let accentFill = pair(dark: 0x042040, light: 0xCBE1F9)
-    static let accentGlyph = pair(dark: 0x6CA4EC, light: 0x164E93)
+    /// Акцент экрана записи (макет в Figma): голубая рамка, значки и текст
+    /// на полупрозрачной тёмно-синей подложке. В светлой теме — синий
+    /// на светло-голубом.
+    static let accent = pair(dark: 0x5AA5F2, light: 0x164E93)
+    static let accentFill = pair(dark: 0x002142, light: 0xCBE1F9, darkAlpha: 0.5, lightAlpha: 0.7)
     /// Красный записи, ошибок и удаления — приглушённый, а не системный яркий.
     static let red = pair(dark: 0xC62135, light: 0xC62135)
-    /// Точка в кнопке записи: в тёмной теме белая; в светлой белая потерялась бы
-    /// на светло-голубом — там синяя.
-    static let recordDot = pair(dark: 0xFFFFFF, light: 0x164E93)
 
     /// Иконки и подписи в панели окна — цвета Claude Code.
     static let toolbarGlyph = pair(dark: 0xC3C2B7, light: 0x3D3D3A)
@@ -650,15 +647,21 @@ enum AppColors {
         appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
     }
 
-    /// Цвет для тёмной и светлой темы, в виде 0xRRGGBB.
-    private static func pair(dark: UInt32, light: UInt32) -> Color {
+    /// Цвет для тёмной и светлой темы, в виде 0xRRGGBB (и, если нужно, прозрачность).
+    private static func pair(
+        dark: UInt32,
+        light: UInt32,
+        darkAlpha: CGFloat = 1,
+        lightAlpha: CGFloat = 1
+    ) -> Color {
         Color(nsColor: NSColor(name: nil) { appearance in
-            let rgb = isDark(appearance) ? dark : light
+            let isDark = isDark(appearance)
+            let rgb = isDark ? dark : light
             return NSColor(
                 srgbRed: CGFloat((rgb >> 16) & 0xFF) / 255,
                 green: CGFloat((rgb >> 8) & 0xFF) / 255,
                 blue: CGFloat(rgb & 0xFF) / 255,
-                alpha: 1
+                alpha: isDark ? darkAlpha : lightAlpha
             )
         })
     }
