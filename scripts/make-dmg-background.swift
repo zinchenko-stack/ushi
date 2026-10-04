@@ -1,5 +1,6 @@
 // Рисует фон окна установщика (ushi.dmg): стрелка от Ushi к «Программам»
-// и подсказка снизу. Запуск: swift scripts/make-dmg-background.swift release/dmg
+// и подсказка снизу. Фон светлый: подписи под значками Finder рисует тёмными
+// поверх любой картинки — на тёмном фоне их было бы не видно. Запуск: swift scripts/make-dmg-background.swift release/dmg
 // Положение значков задаётся в release/dmg/settings.py — держать в согласии.
 
 import SwiftUI
@@ -13,9 +14,10 @@ let rightX: CGFloat = 470         // «Программы»
 struct Background: View {
     var body: some View {
         ZStack {
+            // Как светлая тема сайта: #F8F7F6 → #EFEEEC.
             LinearGradient(
-                colors: [Color(red: 0.122, green: 0.133, blue: 0.153),
-                         Color(red: 0.090, green: 0.098, blue: 0.114)],
+                colors: [Color(red: 0.973, green: 0.969, blue: 0.965),
+                         Color(red: 0.937, green: 0.933, blue: 0.925)],
                 startPoint: .top, endPoint: .bottom
             )
 
@@ -29,12 +31,13 @@ struct Background: View {
                 p.addLine(to: end)
                 p.addLine(to: CGPoint(x: end.x - 11, y: end.y + 9))
             }
-            .stroke(Color(red: 0.353, green: 0.647, blue: 0.949),
+            // Синий акцент Ushi для светлой темы, #164E93.
+            .stroke(Color(red: 0.086, green: 0.306, blue: 0.576),
                     style: StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round))
 
             Text("Перетащите Ushi в папку «Программы»")
                 .font(.system(size: 15))
-                .foregroundStyle(Color.white.opacity(0.72))
+                .foregroundStyle(Color(red: 0.239, green: 0.239, blue: 0.227))   // #3D3D3A
                 .position(x: size.width / 2, y: 330)
         }
         .frame(width: size.width, height: size.height)
